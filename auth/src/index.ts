@@ -1,11 +1,11 @@
-// src/server.ts
+
 import express, { Application } from "express";
 import dotenv from "dotenv";
-import mongoDb from "./libs/db"; // no need for .js in TS
-import AuthRoutes from "./routes/authroutes"; // update filename if needed
+import mongoDb from "./libs/db"; 
+import AuthRoutes from "./routes/authroutes"; 
 
 dotenv.config();
-mongoDb(); // initialize MongoDB
+mongoDb(); 
 
 const app: Application = express();
 

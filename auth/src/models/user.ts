@@ -1,6 +1,6 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 
-// Define TypeScript interface for User document
+
 export interface IUser extends Document {
   email: string;
   name: string;
@@ -11,7 +11,6 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
-// Define the schema
 const userSchema: Schema<IUser> = new mongoose.Schema(
   {
     email: {
@@ -39,6 +38,5 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Create and export the model
 const UserModel: Model<IUser> = mongoose.model<IUser>("User", userSchema);
 export default UserModel;

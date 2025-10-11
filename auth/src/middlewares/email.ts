@@ -22,7 +22,7 @@ export const sendVerificationCode = async (email: string, verificationCode: stri
 export const welcomeEmail = async (email: string, name: string): Promise<void> => {
   try {
     const response = await transporter.sendMail({
-      from: '"Welcome Email" <mr.rajkumar3579@gmail.com>',
+      from: '"Welcome Email" <process.env.EMAIL>',
       to: email,
       subject: "Welcome!",
       text: "Welcome Message",

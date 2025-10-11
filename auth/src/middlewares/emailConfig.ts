@@ -3,14 +3,14 @@ import nodemailer from "nodemailer";
 export const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
-  secure: true, // use SSL
+  secure: true, 
   auth: {
-    user: "mr.rajkumar2468@gmail.com",
-    pass: "pmzr isik iwzl zzmm", // consider using environment variable for security
+    user: "process.env.EMAIL",
+    pass: "process.env.PASS", 
   },
 });
 
-// Optional: verify connection configuration
+//verify connection 
 transporter.verify((error, success) => {
   if (error) {
     console.error("Email transporter error:", error);
