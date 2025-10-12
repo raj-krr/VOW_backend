@@ -1,0 +1,150 @@
+openapi: 3.0.0
+info:
+  title: Auth API
+  version: 1.0.0
+  description: Authentication endpoints for registration, login, email verification, and password reset.
+
+servers:
+  - url: http://localhost:8000
+    description: Local server
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+             $ref: "#/components/schemas/RegisterRequest"
+              
+      responses:
+        "200":
+          description: User registered successfully
+        "400":
+          description: Missing fields or user already exists
+        "500":
+          description: Internal Server error
+
+  /auth/verifyemail:
+    post:
+      summary: Verify user email
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+              
+      responses:
+        "200":
+          description: Email verified successfully
+        "400":
+          description: Invalid or expired code
+
+  /auth/login:
+    post:
+      summary: Login with email or username
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+              
+      responses:
+        "200":
+          description: Login successful
+        "400":
+          description: Invalid credentials
+
+  /auth/forgotpassword:
+    post:
+      summary: Send OTP for password reset
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+              
+      responses:
+        "200":
+          description: OTP sent
+        "404":
+          description: User not found
+
+  /auth/resetpassword:
+    post:
+      summary: Reset password using OTP
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+              
+      responses:
+        "200":
+          description: Password reset successful
+        "400":
+          description: Invalid or expired OTP
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, name, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    VerifyEmailRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+        password:
+          type: string
+          format: password
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    ResetPasswordRequest:
+      type: object
+      required: [email, otp, newPassword]
+      properties:
+        email:
+          type: string
+        otp:
+          type: string
+        newPassword:
+          type: string
+          format: password
