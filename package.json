@@ -36,6 +36,7 @@
     "mongoose": "^8.19.1",
     "nodemailer": "^7.0.9",
     "swagger-ui-express": "^5.0.1",
-    "yamljs": "^0.3.0"
+    "yamljs": "^0.3.0",
+    "zod": "^4.1.12"
   }
 }
