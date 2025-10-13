@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --watch \"src/**/*.ts\" --exec \"npx ts-node\" src/index.ts",
-    "build": "tsc && if not exist dist\\swagger mkdir dist\\swagger && copy src\\swagger\\swagger.yaml dist\\swagger\\",
+    "build": "tsc",
     "start": "node  dist/index.js"
   },
   "author": "",
