@@ -3,7 +3,7 @@ name: CI/CD for Chrona Backend
 on:
   push:
     branches:
-      - production  
+      - san-auth  
 
 jobs:
   build-and-deploy:
@@ -24,8 +24,8 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/chrona-backend:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/chrona-backend:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/vow-auth:02 .
+          docker push ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.1.0
@@ -34,7 +34,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/chrona-backend:latest
-            sudo docker stop chrona-backend || true
-            sudo docker rm chrona-backend || true
-            sudo docker run -d -p 443:8000 --env-file /home/ec2-user/.env --name chrona-backend ${{ secrets.DOCKER_USERNAME }}/chrona-backend:latest
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+            sudo docker stop vow-auth || true
+            sudo docker rm vow-auth || true
+            sudo docker run -d -p 443:8000 --env-file /home/ec2-user/.env --name vow-auth ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
