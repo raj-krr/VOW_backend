@@ -89,12 +89,23 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ResetPasswordRequest"
-              
+  
+  /auth/logout:
+    post:
+      summary: Logout user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+
       responses:
         "200":
-          description: Password reset successful
+          description: Logged out successfully
         "400":
-          description: Invalid or expired OTP
+          description: refreshToken is required
 components:
   schemas:
     RegisterRequest:
@@ -148,3 +159,10 @@ components:
         newPassword:
           type: string
           format: password
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string

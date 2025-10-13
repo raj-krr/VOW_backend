@@ -1,52 +1,65 @@
 import { Request, Response } from "express";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import UserModel from "../models/user";
-import { sendVerificationCode, welcomeEmail ,sendResetOtpEmail} from "../middlewares/email";
+import { sendVerificationCode, welcomeEmail, sendResetOtpEmail } from "../middlewares/email";
 
 interface RegisterRequestBody {
   email: string;
   name: string;
   password: string;
-  username:string;
-};
+  username: string;
+}
 
 interface VerifyEmailRequestBody {
   code: string;
 }
-interface LoginRequestBody{
-  identifier:string,
-  password:string,
+interface LoginRequestBody {
+  identifier: string;
+  password: string;
+}
+interface ForgetpasswordRequestBody {
+  email: string;
+}
+interface ResetPasswordRequestBody {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+interface LogoutRequestBody {
+  refreshToken?: string;
+}
+
+
+const sanitizeUser = (userDoc: any) => {
+  const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
+  delete user.password;
+  delete user.refreshToken;
+  delete user.resetOtp;
+  delete user.resetOtpExpires;
+  delete user.verificationCode;
+  return user;
 };
-interface ForgetpasswordRequestBody{
-  email:string,
-}
-interface ResetPasswordRequestBody{
-  email:string,
-  otp:string,
-  newPassword:string
-}
-//signup
-const register = async (req: Request< {},{}, RegisterRequestBody>, res: Response): Promise<Response> => {
+
+// signup
+const register = async (req: Request<{}, {}, RegisterRequestBody>, res: Response): Promise<Response> => {
   try {
-    const { email, name, password ,username} = req.body;
+    const { email, name, password, username } = req.body;
 
     if (!email || !name || !password || !username) {
       return res.status(400).json({ success: false, msg: "All fields are required" });
     }
 
-  const existingUser = await UserModel.findOne({ $or: [{ email }, { username }] });
+    const existingUser = await UserModel.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
       return res.status(400).json({ success: false, msg: "User already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     const user = new UserModel({
       email,
       username,
-      password: hashedPassword,
+      password,
       name,
       verificationCode,
     });
@@ -54,12 +67,14 @@ const register = async (req: Request< {},{}, RegisterRequestBody>, res: Response
     await user.save();
     await sendVerificationCode(user.email, verificationCode);
 
-    return res.status(200).json({ success: true, msg: "User registered successfully", user });
+    const safeUser = sanitizeUser(user);
+    return res.status(201).json({ success: true, msg: "User registered successfully", user: safeUser });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, msg: "Internal server error" });
   }
 };
+
 // verify email
 const verifyEmail = async (req: Request<{}, {}, VerifyEmailRequestBody>, res: Response): Promise<Response> => {
   try {
@@ -73,6 +88,11 @@ const verifyEmail = async (req: Request<{}, {}, VerifyEmailRequestBody>, res: Re
     user.isVerified = true;
     user.verificationCode = undefined;
     await user.save();
+    if(!user.isVerified){
+      await UserModel.findByIdAndDelete(user._id);
+      return res.status(400).json({ success: false, msg: "User not verified" });
+      
+    }
 
     await welcomeEmail(user.email, user.name);
 
@@ -82,8 +102,9 @@ const verifyEmail = async (req: Request<{}, {}, VerifyEmailRequestBody>, res: Re
     return res.status(500).json({ success: false, msg: "Internal server error" });
   }
 };
-//login
-const login = async (req: Request<{},{},LoginRequestBody>, res: Response): Promise<Response> => {
+
+// login
+const login = async (req: Request<{}, {}, LoginRequestBody>, res: Response): Promise<Response> => {
   try {
     const { identifier, password } = req.body;
 
@@ -93,24 +114,35 @@ const login = async (req: Request<{},{},LoginRequestBody>, res: Response): Promi
 
     const user = await UserModel.findOne({ $or: [{ email: identifier }, { username: identifier }] });
     if (!user) {
-      return res.status(400).json({ success: false, msg: "User not found" });
+      return res.status(404).json({ success: false, msg: "User not found" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ success: false, msg: "Invalid credentials" });
     }
 
-    return res.status(200).json({ success: true, msg: "Login successful", user });
+    const { accessToken, refreshToken } = user.generateTokens();
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    const safeUser = sanitizeUser(user);
+    return res.status(200).json({
+      success: true,
+      msg: "Login successful",
+      user: safeUser,
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, msg: "Internal server error" });
   }
-
 };
 
-// Generate and send OTP
- const forgotPassword = async (req: Request<{}, {}, ForgetpasswordRequestBody>, res: Response): Promise<Response> => {
+// generate and send OTP
+const forgotPassword = async (req: Request<{}, {}, ForgetpasswordRequestBody>, res: Response): Promise<Response> => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, msg: "Email is required" });
@@ -118,19 +150,29 @@ const login = async (req: Request<{},{},LoginRequestBody>, res: Response): Promi
     const user = await UserModel.findOne({ email });
     if (!user) return res.status(404).json({ success: false, msg: "User not found" });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10min otp expiry
     user.resetOtp = otp;
-    user.resetOtpExpires = new Date(Date.now() + 10 * 60 * 1000); 
+    user.resetOtpExpires = expiresAt;
     await user.save();
 
     await sendResetOtpEmail(email, otp);
-    return res.status(200).json({ success: true, msg: "OTP sent to email" });
+
+    const expiresIn = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+
+    return res.status(200).json({
+      success: true,
+      msg: "OTP sent to email",
+      otpExpiresAt: expiresAt.toISOString(),
+      otpExpiresIn: expiresIn,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, msg: "Internal server error" });
   }
 };
-// Verify OTP and reset password
+
+//verify OTP and reset password
 const resetPassword = async (req: Request<{}, {}, ResetPasswordRequestBody>, res: Response): Promise<Response> => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -140,14 +182,12 @@ const resetPassword = async (req: Request<{}, {}, ResetPasswordRequestBody>, res
     const user = await UserModel.findOne({
       email,
       resetOtp: otp,
-      resetOtpExpires: { $gt: new Date() }, 
+      resetOtpExpires: { $gt: new Date() },
     });
 
-    if (!user)
-      return res.status(400).json({ success: false, msg: "Invalid or expired OTP" });
+    if (!user) return res.status(400).json({ success: false, msg: "Invalid or expired OTP" });
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
+    user.password = newPassword;
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
     await user.save();
@@ -159,4 +199,27 @@ const resetPassword = async (req: Request<{}, {}, ResetPasswordRequestBody>, res
   }
 };
 
-export { register, verifyEmail, login ,forgotPassword,resetPassword};
+//logout
+const logout = async (req: Request<{}, {}, LogoutRequestBody>, res: Response): Promise<Response> => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, msg: "refreshToken is required" });
+    }
+    const user = await UserModel.findOne({ refreshToken });
+    if (!user) {
+      return res.status(200).json({ success: true, msg: "Logged out" });
+    }
+
+    user.refreshToken = undefined;
+    await user.save();
+
+    return res.status(200).json({ success: true, msg: "Logged out successfully" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, msg: "Internal server error" });
+  }
+};
+
+export { register, verifyEmail, login, forgotPassword, resetPassword, logout };
