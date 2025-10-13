@@ -1,4 +1,4 @@
-name: CI/CD for Chrona Backend
+name: CI/CD for VOW Backend
 
 on:
   push:
