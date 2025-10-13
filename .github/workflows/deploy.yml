@@ -31,10 +31,10 @@ jobs:
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
+          username: ubuntu-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
             sudo docker stop vow-auth || true
             sudo docker rm vow-auth || true
-            sudo docker run -d -p 443:8000 --env-file /home/ec2-user/.env --name vow-auth ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+            sudo docker run -d -p 443:8000 --env-file /home/ubuntu-user/.env --name vow-auth ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
