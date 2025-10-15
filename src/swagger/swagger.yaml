@@ -1,0 +1,416 @@
+openapi: 3.0.3
+info:
+  title: Auth API
+  version: "1.0.0"
+  description: Authentication endpoints: register, verify email, resend code, login, forgot/reset password, logout.
+servers:
+  - url: https://vow-org.me
+    description: AWS deployed server
+
+tags:
+  - name: Auth
+    description: Authentication and user account routes
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user (creates or overwrites unverified account)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered successfully — verification code sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSuccess'
+        '400':
+          description: Bad request (missing fields or user exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — email or username already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error / email sending failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verifyemail:
+    post:
+      tags: [Auth]
+      summary: Verify an email using the verification code (OTP)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid or expired code / bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/resend:
+    post:
+      tags: [Auth]
+      summary: Resend verification code for an unverified email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendRequest'
+      responses:
+        '200':
+          description: Verification code resent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request (already verified or missing email)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded for resends
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login using email or username and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful — returns tokens and sanitized user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSuccess'
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/forgetpassword:
+    post:
+      tags: [Auth]
+      summary: Send an OTP for password reset to the user's email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: OTP sent to email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordSuccess'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/resetpassword:
+    post:
+      tags: [Auth]
+      summary: Reset password using the OTP sent to email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid or expired OTP / bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout by invalidating the refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '200':
+          description: Logged out successfully (or already logged out)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Missing refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, name, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          example: John Doe
+        username:
+          type: string
+          example: johndoe
+        password:
+          type: string
+          format: password
+          example: StrongP@ssw0rd
+
+    RegisterSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "User registered successfully"
+        user:
+          $ref: '#/components/schemas/UserSanitized'
+
+    VerifyEmailRequest:
+      type: object
+      required: [code]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Optional but recommended (search by email + code to avoid collisions)
+          example: user@example.com
+        code:
+          type: string
+          example: "123456"
+
+    ResendRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          description: Email or username
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: StrongP@ssw0rd
+
+    LoginSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "Login successful"
+        user:
+          $ref: '#/components/schemas/UserSanitized'
+        accessToken:
+          type: string
+          description: JWT access token
+        refreshToken:
+          type: string
+          description: JWT refresh token
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    ForgotPasswordSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "OTP sent to email"
+        otpExpiresAt:
+          type: string
+          format: date-time
+          description: ISO string when OTP expires
+
+    ResetPasswordRequest:
+      type: object
+      required: [email, otp, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        otp:
+          type: string
+          example: "123456"
+        newPassword:
+          type: string
+          format: password
+          example: NewStrongP@ss1
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    UserSanitized:
+      type: object
+      properties:
+        _id:
+          type: string
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        name:
+          type: string
+        isVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "Operation completed"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        msg:
+          type: string
+          example: "Error message"
+        details:
+          type: object
+          description: Optional extra information
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
