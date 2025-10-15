@@ -9,12 +9,12 @@ import cors from "cors";
 import mongoDb from "./libs/db";
 import AuthRoutes from "./routes/authroutes";
 import healthRoutes from "./routes/healthroutes";
+import cron from "node-cron";
+import UserModel from "./models/user";
 
 const app: Application = express();
 app.use(express.json());
 app.use(cors());
-
-mongoDb();
 
 const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -44,30 +44,26 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 });
 
 const PORT: string | number = process.env.PORT || "8000";
-const server = app.listen(PORT, () => {
+mongoDb().then(() => {
+  console.log("Database connected successfully");
   console.log(`Server running at http://localhost:${PORT}`);
   console.log(`Swagger Docs: http://localhost:${PORT}/api-docs`);
+}).catch((err) => {
+  console.error("Database connection failed", err);
+  process.exit(1);
 });
+app.listen(PORT);
 
-const gracefulShutdown = (err?: Error) => {
-  if (err) console.error("Shutting down due to error:", err);
-  server.close(() => {
-    console.log("HTTP server closed.");
-    process.exit(err ? 1 : 0);
-  });
-
-  setTimeout(() => {
-    console.error("Forcing shutdown.");
-    process.exit(1);
-  }, 10000).unref();
-};
+cron.schedule("0 2 * * *", async () => { // 2am reset for unverified useres
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await UserModel.deleteMany({ isVerified: false, createdAt: { $lt: cutoff } });
+  console.log("purged stale unverified accounts");
+});
 
 process.on("unhandledRejection", (reason: unknown, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
-  gracefulShutdown(reason instanceof Error ? reason : new Error(String(reason)));
 });
 
 process.on("uncaughtException", (err: Error) => {
   console.error("Uncaught Exception:", err);
-  gracefulShutdown(err);
 });

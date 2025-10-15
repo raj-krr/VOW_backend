@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import UserModel, { IUser } from "../models/user";
 import { sendVerificationCode, welcomeEmail, sendResetOtpEmail } from "../middlewares/email";
+import { generateOtp } from "../utils/otp";
 
 const sanitizeUser = (userDoc: IUser) => {
   const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
@@ -15,37 +16,119 @@ const sanitizeUser = (userDoc: IUser) => {
 // REGISTER
 const register = async (req: Request<{}, {}, IUser>, res: Response) => {
   const { email, name, username, password } = req.body;
+  if (!email || !name || !username || !password) {
+    return res.status(400).json({ success: false, msg: "Missing required fields" });
+  }
 
-  const existingUser = await UserModel.findOne({ $or: [{ email }, { username }] });
-  if (existingUser) {
+  const normalizedEmail = String(email).toLowerCase().trim();
+
+  // if a verified user exists with same email, block.
+  const verifiedUser = await UserModel.findOne({ email: normalizedEmail, isVerified: true });
+  if (verifiedUser) {
     return res.status(400).json({ success: false, msg: "User already exists" });
   }
 
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+  // If verified username exists, block
+  const verifiedUsername = await UserModel.findOne({ username, isVerified: true });
+  if (verifiedUsername) {
+    return res.status(400).json({ success: false, msg: "Username already taken" });
+  }
 
-  const user = new UserModel({ email, username, password, name, verificationCode });
+  // generate OTP and expiry
+  const verificationCode = generateOtp(6);
+  const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+  const query = { email: normalizedEmail, $or: [{ isVerified: false }, { isVerified: { $exists: false } }] };
+  const update = {
+    $set: {
+      name,
+      username,
+      password,
+      isVerified: false,
+      verificationCode,
+      verificationCodeExpires,
+      updatedAt: new Date(),
+    },
+    $setOnInsert: { createdAt: new Date() },
+  };
+
+
+  const bcrypt = require("bcryptjs");
+  const salt = await bcrypt.genSalt(10);
+  update.$set.password = await bcrypt.hash(password, salt);
+
+  //update unverified user
+  try {
+    const options = { upsert: true, new: true, runValidators: true };
+    const user = await UserModel.findOneAndUpdate(query, update, options).exec();
+
+    try {
+      await sendVerificationCode(normalizedEmail, verificationCode);
+    } catch (err) {
+      if (user) {
+        user.verificationCode = undefined as any;
+        user.verificationCodeExpires = undefined as any;
+        await user.save();
+      }
+      return res.status(500).json({ success: false, msg: "Failed to send verification email. Please try again." });
+    }
+
+    return res.status(201).json({
+      success: true,
+      msg: "Registered. Check your email for the verification code.",
+      user: user ? sanitizeUser(user as IUser) : undefined,
+    });
+  } catch (err: any) {
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, msg: "Email or username already in use" });
+    }
+    console.error("Register error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+//resend verification
+const resendVerification = async (req: Request<{}, {}, { email: string }>, res: Response) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, msg: "Email required" });
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await UserModel.findOne({ email: normalizedEmail });
+  if (!user) return res.status(404).json({ success: false, msg: "User not found" });
+  if (user.isVerified) return res.status(400).json({ success: false, msg: "Already verified" });
+
+  const code = generateOtp(6);
+  user.verificationCode = code;
+  user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
   await user.save();
 
-  sendVerificationCode(email, verificationCode).catch(err =>
-    console.error("Failed to send verification email:", err)
-  );
+  try {
+    await sendVerificationCode(normalizedEmail, code);
+  } catch (err) {
+    return res.status(500).json({ success: false, msg: "Failed to send verification email" });
+  }
 
-  return res.status(201).json({ success: true, msg: "User registered successfully", user: sanitizeUser(user) });
+  return res.status(200).json({ success: true, msg: "Verification code resent" });
 };
 
 // VERIFY EMAIL
-const verifyEmail = async (req: Request<{}, {}, { code: string }>, res: Response) => {
-  const { code } = req.body;
+const verifyEmail = async (req: Request<{}, {}, { code: string; email?: string }>, res: Response) => {
+  const { code, email } = req.body;
 
-  const user = await UserModel.findOne({ verificationCode: code });
+  const query: any = email ? { email: email.toLowerCase().trim(), verificationCode: code } : { verificationCode: code };
+  const user = await UserModel.findOne(query);
+
   if (!user) return res.status(400).json({ success: false, msg: "Invalid or expired code" });
+  if (!user.verificationCodeExpires || new Date() > user.verificationCodeExpires) {
+    return res.status(400).json({ success: false, msg: "Invalid or expired code" });
+  }
 
   user.isVerified = true;
-  user.verificationCode = undefined;
+  user.verificationCode = undefined as any;
+  user.verificationCodeExpires = undefined as any;
   await user.save();
 
   welcomeEmail(user.email, user.name).catch(err => console.error("Failed to send welcome email:", err));
-
   return res.status(200).json({ success: true, msg: "Email verified successfully" });
 };
 
@@ -119,4 +202,4 @@ const logout = async (req: Request<{}, {}, { refreshToken?: string }>, res: Resp
   return res.status(200).json({ success: true, msg: "Logged out successfully" });
 };
 
-export { register, verifyEmail, login, forgotPassword, resetPassword, logout };
+export { register, verifyEmail, resendVerification, login, forgotPassword, resetPassword, logout };

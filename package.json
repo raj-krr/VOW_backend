@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --watch \"src/**/*.ts\" --exec \"npx ts-node\" src/index.ts",
-    "build": "tsc",
+    "build": "tsc ",
     "start": "node  dist/index.js"
   },
   "author": "",
@@ -31,9 +31,11 @@
     "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
     "ioredis": "^5.8.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
+    "node-cron": "^4.2.1",
     "nodemailer": "^7.0.9",
     "swagger-ui-express": "^5.0.1",
     "yamljs": "^0.3.0",
