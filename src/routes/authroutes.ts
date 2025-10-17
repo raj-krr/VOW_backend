@@ -1,5 +1,5 @@
 import express from "express";
-import { forgotPassword, resendVerification, login, register, resetPassword, verifyEmail, logout } from "../controllers/auth";
+import { forgotPassword, resendVerification, login, register, resetPassword, verifyEmail} from "../controllers/auth";
 import { asyncHandler } from "../utils/asyncHandler";
 import { validate } from "../middlewares/validate";
 import { ipLimiter, emailThrottle } from "../middlewares/rateLimit";
@@ -20,6 +20,5 @@ AuthRoutes.post("/resend", asyncHandler(resendVerification));
 AuthRoutes.post("/login", validate(loginSchema), asyncHandler(login));
 AuthRoutes.post("/forgetpassword", validate(forgetPasswordSchema), asyncHandler(forgotPassword));
 AuthRoutes.post("/resetpassword", validate(resetPasswordSchema), asyncHandler(resetPassword));
-AuthRoutes.post("/logout", validate(logoutSchema), asyncHandler(logout));
 
 export default AuthRoutes;

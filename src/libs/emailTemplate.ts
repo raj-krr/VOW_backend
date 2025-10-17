@@ -77,7 +77,7 @@ export const getVerificationEmailTemplate = (verificationCode: string): string =
 </html>
 `;
 
-export const getWelcomeEmailTemplate = (name: string): string => `
+export const getWelcomeEmailTemplate = (username: string): string => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -150,7 +150,7 @@ export const getWelcomeEmailTemplate = (name: string): string => `
     <div class="container">
         <div class="header">Welcome to Our Community!</div>
         <div class="content">
-            <p class="welcome-message">Hello ${name},</p>
+            <p class="welcome-message">Hello ${username},</p>
             <p>We’re thrilled to have you join us! Your registration was successful, and we’re committed to providing you with the best experience possible.</p>
             <p>Here’s how you can get started:</p>
             <ul>

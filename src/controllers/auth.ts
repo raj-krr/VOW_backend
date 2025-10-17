@@ -15,8 +15,8 @@ const sanitizeUser = (userDoc: IUser) => {
 
 // REGISTER
 const register = async (req: Request<{}, {}, IUser>, res: Response) => {
-  const { email, name, username, password } = req.body;
-  if (!email || !name || !username || !password) {
+  const { email,  username, password } = req.body;
+  if (!email|| !username || !password) {
     return res.status(400).json({ success: false, msg: "Missing required fields" });
   }
 
@@ -36,12 +36,11 @@ const register = async (req: Request<{}, {}, IUser>, res: Response) => {
 
   // generate OTP and expiry
   const verificationCode = generateOtp(6);
-  const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  const verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
   const query = { email: normalizedEmail, $or: [{ isVerified: false }, { isVerified: { $exists: false } }] };
   const update = {
     $set: {
-      name,
       username,
       password,
       isVerified: false,
@@ -99,7 +98,7 @@ const resendVerification = async (req: Request<{}, {}, { email: string }>, res: 
 
   const code = generateOtp(6);
   user.verificationCode = code;
-  user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
+  user.verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000);
   await user.save();
 
   try {
@@ -128,7 +127,7 @@ const verifyEmail = async (req: Request<{}, {}, { code: string; email?: string }
   user.verificationCodeExpires = undefined as any;
   await user.save();
 
-  welcomeEmail(user.email, user.name).catch(err => console.error("Failed to send welcome email:", err));
+  welcomeEmail(user.email, user.username).catch(err => console.error("Failed to send welcome email:", err));
   return res.status(200).json({ success: true, msg: "Email verified successfully" });
 };
 
@@ -187,19 +186,6 @@ const resetPassword = async (req: Request<{}, {}, { email: string; otp: string; 
   return res.status(200).json({ success: true, msg: "Password reset successful" });
 };
 
-// LOGOUT
-const logout = async (req: Request<{}, {}, { refreshToken?: string }>, res: Response) => {
-  const { refreshToken } = req.body;
 
-  if (!refreshToken) return res.status(400).json({ success: false, msg: "refreshToken is required" });
 
-  const user = await UserModel.findOne({ refreshToken });
-  if (!user) return res.status(200).json({ success: true, msg: "Logged out" });
-
-  user.refreshToken = undefined;
-  await user.save();
-
-  return res.status(200).json({ success: true, msg: "Logged out successfully" });
-};
-
-export { register, verifyEmail, resendVerification, login, forgotPassword, resetPassword, logout };
+export { register, verifyEmail, resendVerification, login, forgotPassword, resetPassword };

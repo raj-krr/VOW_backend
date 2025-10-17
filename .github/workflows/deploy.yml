@@ -3,7 +3,7 @@ name: CI/CD for VOW Backend
 on:
   push:
     branches:
-      - san-auth  
+      - main 
 
 jobs:
   build-and-deploy:

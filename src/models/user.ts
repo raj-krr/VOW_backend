@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 
 export interface IUser extends Document {
   email: string;
-  name: string;
   username: string;
   password: string;
   isVerified: boolean;
@@ -30,7 +29,6 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       trim: true,
     },
     username: { type: String, required: true, unique: true },
-    name: { type: String, required: true },
     password: { type: String, required: true },
     isVerified: { type: Boolean, default: false },
     verificationCode: { type: String },

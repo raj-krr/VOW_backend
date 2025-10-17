@@ -19,14 +19,14 @@ export const sendVerificationCode = async (email: string, verificationCode: stri
 };
 
 //welcome email
-export const welcomeEmail = async (email: string, name: string): Promise<void> => {
+export const welcomeEmail = async (email: string, username: string): Promise<void> => {
   try {
     const response = await transporter.sendMail({
       from: '"VOW APP" <process.env.EMAIL>',
       to: email,
       subject: "Welcome!",
       text: "Welcome Message",
-      html: getWelcomeEmailTemplate(name),
+      html: getWelcomeEmailTemplate(username),
     });
     console.log("Welcome email sent successfully", response);
   } catch (error) {

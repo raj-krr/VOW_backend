@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Auth API
   version: "1.0.0"
-  description: Authentication endpoints: register, verify email, resend code, login, forgot/reset password, logout.
+  description: Authentication endpoints: register, verify email, resend code, login, forgot/reset password.
 servers:
   - url: https://vow-org.me
     description: AWS deployed server
@@ -30,19 +30,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegisterSuccess'
         '400':
-          description: Bad request (missing fields or user exists)
+          description: Missing fields or user exists
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Conflict — email or username already in use
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: Rate limit exceeded
+          description: Email or username already in use
           content:
             application/json:
               schema:
@@ -102,7 +96,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
         '400':
-          description: Bad request (already verified or missing email)
+          description: Already verified or missing email
           content:
             application/json:
               schema:
@@ -113,8 +107,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: Rate limit exceeded for resends
+        '500':
+          description: Failed to send verification email
           content:
             application/json:
               schema:
@@ -150,7 +144,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /auth/forgetpassword:
+  /auth/forgotpassword:
     post:
       tags: [Auth]
       summary: Send an OTP for password reset to the user's email
@@ -204,43 +198,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /auth/logout:
-    post:
-      tags: [Auth]
-      summary: Logout by invalidating the refresh token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LogoutRequest'
-      responses:
-        '200':
-          description: Logged out successfully (or already logged out)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          description: Missing refresh token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
 components:
   schemas:
     RegisterRequest:
       type: object
-      required: [email, name, username, password]
+      required: [email, username, password]
       properties:
         email:
           type: string
           format: email
           example: user@example.com
-        name:
-          type: string
-          example: John Doe
         username:
           type: string
           example: johndoe
@@ -257,7 +224,7 @@ components:
           example: true
         msg:
           type: string
-          example: "User registered successfully"
+          example: "Registered. Check your email for the verification code."
         user:
           $ref: '#/components/schemas/UserSanitized'
 
@@ -268,7 +235,7 @@ components:
         email:
           type: string
           format: email
-          description: Optional but recommended (search by email + code to avoid collisions)
+          description: Optional but recommended
           example: user@example.com
         code:
           type: string
@@ -309,10 +276,8 @@ components:
           $ref: '#/components/schemas/UserSanitized'
         accessToken:
           type: string
-          description: JWT access token
         refreshToken:
           type: string
-          description: JWT refresh token
 
     ForgotPasswordRequest:
       type: object
@@ -335,7 +300,6 @@ components:
         otpExpiresAt:
           type: string
           format: date-time
-          description: ISO string when OTP expires
 
     ResetPasswordRequest:
       type: object
@@ -353,14 +317,6 @@ components:
           format: password
           example: NewStrongP@ss1
 
-    LogoutRequest:
-      type: object
-      required: [refreshToken]
-      properties:
-        refreshToken:
-          type: string
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
     UserSanitized:
       type: object
       properties:
@@ -370,8 +326,6 @@ components:
           type: string
           format: email
         username:
-          type: string
-        name:
           type: string
         isVerified:
           type: boolean
@@ -403,7 +357,7 @@ components:
           example: "Error message"
         details:
           type: object
-          description: Optional extra information
+          description: Optional extra info
 
 security:
   - bearerAuth: []
