@@ -4,6 +4,8 @@ import { sendVerificationCode, welcomeEmail, sendResetOtpEmail } from "../middle
 import { generateOtp } from "../utils/otp";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { options } from "../constant"
+
 
 const sanitizeUser = (userDoc: IUser) => {
   const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
@@ -12,13 +14,14 @@ const sanitizeUser = (userDoc: IUser) => {
   delete user.resetOtp;
   delete user.resetOtpExpires;
   delete user.verificationCode;
+  delete user.verificationCodeExpires;
   return user;
 };
 
 // REGISTER
 const register = async (req: Request<{}, {}, IUser>, res: Response) => {
-  const { email,  username, password } = req.body;
-  if (!email|| !username || !password) {
+  const { email, username, password } = req.body;
+  if (!email || !username || !password) {
     return res.status(400).json({ success: false, msg: "Missing required fields" });
   }
 
@@ -35,46 +38,47 @@ const register = async (req: Request<{}, {}, IUser>, res: Response) => {
   }
 
   const verificationCode = generateOtp(6);
-  const verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+  const verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 min
 
-  const query = { email: normalizedEmail, $or: [{ isVerified: false }, { isVerified: { $exists: false } }] };
-  const update = {
-    $set: {
+  let user = await UserModel.findOne({ email: normalizedEmail, isVerified: false });
+
+  if (user) {
+    // Update fields
+    user.username = username;
+    user.password = password;
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpires = verificationCodeExpires;
+    user.updatedAt = new Date();
+  } else {
+    // Create new user
+    user = new UserModel({
+      email: normalizedEmail,
       username,
       password,
       isVerified: false,
       verificationCode,
       verificationCodeExpires,
+      createdAt: new Date(),
       updatedAt: new Date(),
-    },
-    $setOnInsert: { createdAt: new Date() },
-  };
+    });
+  }
 
-
-  const bcrypt = require("bcryptjs");
-  const salt = await bcrypt.genSalt(10);
-  update.$set.password = await bcrypt.hash(password, salt);
-
-  //update unverified user
   try {
-    const options = { upsert: true, new: true, runValidators: true };
-    const user = await UserModel.findOneAndUpdate(query, update, options).exec();
+    await user.save();
 
     try {
       await sendVerificationCode(normalizedEmail, verificationCode);
     } catch (err) {
-      if (user) {
-        user.verificationCode = undefined as any;
-        user.verificationCodeExpires = undefined as any;
-        await user.save();
-      }
+      user.verificationCode = undefined as any;
+      user.verificationCodeExpires = undefined as any;
+      await user.save();
       return res.status(500).json({ success: false, msg: "Failed to send verification email. Please try again." });
     }
 
     return res.status(201).json({
       success: true,
       msg: "Registered. Check your email for the verification code.",
-      user: user ? sanitizeUser(user as IUser) : undefined,
+      user: sanitizeUser(user as IUser),
     });
   } catch (err: any) {
     if (err.code === 11000) {
@@ -92,15 +96,19 @@ const resendVerification = async (req: Request<{}, {}, { email: string }>, res: 
 
   const normalizedEmail = email.toLowerCase().trim();
   const user = await UserModel.findOne({ email: normalizedEmail });
+
   if (!user) return res.status(404).json({ success: false, msg: "User not found" });
   if (user.isVerified) return res.status(400).json({ success: false, msg: "Already verified" });
 
+  // Update fields
   const code = generateOtp(6);
   user.verificationCode = code;
   user.verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000);
-  await user.save();
+  user.updatedAt = new Date();
 
   try {
+    await user.save();
+
     await sendVerificationCode(normalizedEmail, code);
   } catch (err) {
     return res.status(500).json({ success: false, msg: "Failed to send verification email" });
@@ -138,13 +146,18 @@ const login = async (req: Request<{}, {}, { identifier: string; password: string
   if (!user) return res.status(404).json({ success: false, msg: "User not found" });
 
   const isMatch = await user.comparePassword(password);
+  console.log(isMatch, user.email,  password, user.password);
   if (!isMatch) return res.status(400).json({ success: false, msg: "Invalid credentials" });
+
+  if (!user.isVerified) {
+    return res.status(403).json({ success: false, msg: "Email not verified" });
+  }
 
   const { accessToken, refreshToken } = user.generateTokens();
   user.refreshToken = refreshToken;
   await user.save();
 
-  return res.status(200).json({ success: true, msg: "Login successful", user: sanitizeUser(user), accessToken, refreshToken });
+  return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options).json({ success: true, msg: "Login successful", user: sanitizeUser(user) });
 };
 
 // FORGOT PASSWORD
@@ -187,20 +200,22 @@ const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string 
 
     if (!user) return res.status(400).json({ success: false, msg: "Invalid or expired OTP" });
 
-    // Create a short-lived reset token (JWT). Ensure RESET_PASSWORD_TOKEN_SECRET is set in env.
     const secret = process.env.RESET_PASSWORD_TOKEN_SECRET;
     if (!secret) {
       console.error("Missing RESET_PASSWORD_TOKEN_SECRET in env");
       return res.status(500).json({ success: false, msg: "Server misconfiguration" });
     }
 
-    const payload = { uid: String(user._id), ts: Date.now() };
+    const payload = {user :  user?._id as string, ts: Date.now() };
     const resetToken = jwt.sign(payload, secret, { expiresIn: "5m" }); // 5 minutes
 
-    return res.status(200).json({
+    return res.status(200).cookie("resetToken", resetToken, {  httpOnly: true,
+  secure: false,
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000, }).json({
       success: true,
       msg: "OTP verified",
-      resetToken,
+      // resetToken,
       expiresIn: 10 * 60, //60 sec
     });
   } catch (err) {
@@ -210,8 +225,11 @@ const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string 
 };
 
 //update password
-const updatePassword = async (req: Request<{}, {}, { resetToken: string; newPassword: string }>, res: Response) => {
-  const { resetToken, newPassword } = req.body;
+const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res: Response) => {
+  const { newPassword } = req.body;
+  const resetToken = req.cookies?.resetToken || req.headers["x-reset-token"] as string;
+  console.log(req.cookies);
+  console.log("Reset Token:", resetToken);
   if (!resetToken || !newPassword) return res.status(400).json({ success: false, msg: "resetToken and newPassword required" });
 
   const secret = process.env.RESET_PASSWORD_TOKEN_SECRET;
@@ -222,8 +240,8 @@ const updatePassword = async (req: Request<{}, {}, { resetToken: string; newPass
 
   try {
     // verify token
-    const decoded = jwt.verify(resetToken, secret) as { uid: string; ts?: number };
-    const userId = decoded.uid;
+    const decoded = jwt.verify(resetToken, secret) as { user: string; ts?: number };
+    const userId = decoded.user;
     if (!userId) return res.status(400).json({ success: false, msg: "Invalid token" });
 
     const user = await UserModel.findById(userId);
@@ -233,9 +251,7 @@ const updatePassword = async (req: Request<{}, {}, { resetToken: string; newPass
       return res.status(400).json({ success: false, msg: "Reset OTP expired — please request a new one" });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashed = await bcrypt.hash(newPassword, salt);
-    user.password = hashed;
+    user.password = newPassword;
 
     user.resetOtp = undefined as any;
     user.resetOtpExpires = undefined as any;
