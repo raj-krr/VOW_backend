@@ -167,24 +167,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /auth/resetpassword:
+  /auth/verifyresetotp:
     post:
       tags: [Auth]
-      summary: Reset password using the OTP sent to email
+      summary: Verify reset OTP (first step in two-step reset flow)
+      description: Verifies the OTP sent by email. If valid, returns a short-lived `resetToken` that the client can use to update password.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResetPasswordRequest'
+              $ref: '#/components/schemas/VerifyResetOtpRequest'
       responses:
         '200':
-          description: Password reset successful
+          description: OTP verified — reset token returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                $ref: '#/components/schemas/VerifyResetOtpSuccess'
         '400':
           description: Invalid or expired OTP / bad request
           content:
@@ -197,8 +204,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/updatepassword:
+    post:
+      tags: [Auth]
+      summary: Update password using reset token obtained from verifyresetotp
+      description: Client exchanges the `resetToken` and `newPassword` to update the user's password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePasswordRequest'
+      responses:
+        '200':
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid or expired token / bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized / invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     RegisterRequest:
       type: object
@@ -301,6 +363,7 @@ components:
           type: string
           format: date-time
 
+    # Keep for backward compatibility if you still want it
     ResetPasswordRequest:
       type: object
       required: [email, otp, newPassword]
@@ -312,6 +375,48 @@ components:
         otp:
           type: string
           example: "123456"
+        newPassword:
+          type: string
+          format: password
+          example: NewStrongP@ss1
+
+    # Two-step flow schemas (match your verifyresetotp & updatepassword routes)
+    VerifyResetOtpRequest:
+      type: object
+      required: [email, otp]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        otp:
+          type: string
+          example: "123456"
+
+    VerifyResetOtpSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "OTP verified"
+        resetToken:
+          type: string
+          description: Short-lived token (use on /auth/updatepassword)
+        expiresIn:
+          type: integer
+          description: Token TTL in seconds
+          example: 600
+
+    UpdatePasswordRequest:
+      type: object
+      required: [resetToken, newPassword]
+      properties:
+        resetToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         newPassword:
           type: string
           format: password
@@ -361,6 +466,7 @@ components:
 
 security:
   - bearerAuth: []
+
 
 components:
   securitySchemes:
