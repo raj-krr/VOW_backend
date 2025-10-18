@@ -22,6 +22,7 @@ app.use(cors({
   origin: FRONTEND_URL,
   credentials: true,
 }));
+app.options("*", cors());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
