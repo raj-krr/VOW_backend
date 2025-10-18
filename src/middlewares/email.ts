@@ -44,7 +44,7 @@ export const sendResetOtpEmail = async (email: string, otp: string) => {
       <h2>Reset Your Password</h2>
       <p>Your OTP for password reset is:</p>
       <h1 style="letter-spacing:3px">${otp}</h1>
-      <p>This OTP will expire in 10 minutes.</p>
+      <p>This OTP will expire in 2 minutes.</p>
     `,
   });
 };
