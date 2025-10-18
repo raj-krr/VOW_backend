@@ -19,7 +19,7 @@ AuthRoutes.post("/verifyemail", validate(verifyEmailSchema), asyncHandler(verify
 AuthRoutes.post("/resend", asyncHandler(resendVerification));
 AuthRoutes.post("/login", validate(loginSchema), asyncHandler(login));
 AuthRoutes.post("/forgetpassword", validate(forgetPasswordSchema), asyncHandler(forgotPassword));
-AuthRoutes.post("/verifyresetotp", validate(resetPasswordSchema), asyncHandler(verifyResetOtp));
-AuthRoutes.post("/updatepassword", validate(resetPasswordSchema), asyncHandler(updatePassword));
+AuthRoutes.post("/verifyresetotp",  asyncHandler(verifyResetOtp));
+AuthRoutes.post("/updatepassword",  asyncHandler(updatePassword));
 
 export default AuthRoutes;

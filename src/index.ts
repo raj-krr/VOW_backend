@@ -4,17 +4,21 @@ dotenv.config();
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
-import path from "path";
+import path, { parse } from "path";
 import cors from "cors";
 import mongoDb from "./libs/db";
 import AuthRoutes from "./routes/authroutes";
 import healthRoutes from "./routes/healthroutes";
 import cron from "node-cron";
 import UserModel from "./models/user";
+import { ApiError } from "./utils/ApiError";
+import cookieParser from "cookie-parser";
 
 const app: Application = express();
 app.use(express.json());
 app.use(cors());
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
 
 const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));

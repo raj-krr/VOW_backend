@@ -16,6 +16,7 @@ export interface IUser extends Document {
   updatedAt: Date;
 
   comparePassword(password: string): Promise<boolean>;
+  isPasswordCorrect(password: string): Promise<boolean>;
   generateTokens(): { accessToken: string; refreshToken: string };
 }
 
@@ -39,6 +40,8 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+
 userSchema.pre("save", async function (next) {
   const user = this as IUser;
   if (!user.isModified("password")) return next();
@@ -63,5 +66,13 @@ userSchema.methods.generateTokens = function () {
   );
   return { accessToken, refreshToken };
 };
+
+userSchema.methods.isPasswordCorrect = async function (
+  password: string
+): Promise<boolean> {
+  return await bcrypt.compare(password, this.password);
+};
+
 const UserModel: Model<IUser> = mongoose.model<IUser>("User", userSchema);
+
 export default UserModel;
