@@ -14,15 +14,35 @@ import UserModel from "./models/user";
 import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "*";
 
 const app: Application = express();
 app.use(express.json());
-app.use(cors({
-  origin: FRONTEND_URL,
+const allowedOrigins = [
+  "https://vow-blush.vercel.app",
+  "http://localhost:5173",
+  "https://vow-git-auth-sarthak12789s-projects.vercel.app",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
+app.options("*", cors({
+  origin: allowedOrigins,
   credentials: true,
 }));
-app.options("*", cors());
+
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
