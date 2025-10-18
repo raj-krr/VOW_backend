@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import UserModel, { IUser } from "../models/user";
 import { sendVerificationCode, welcomeEmail, sendResetOtpEmail } from "../middlewares/email";
 import { generateOtp } from "../utils/otp";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 const sanitizeUser = (userDoc: IUser) => {
   const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
@@ -22,19 +24,16 @@ const register = async (req: Request<{}, {}, IUser>, res: Response) => {
 
   const normalizedEmail = String(email).toLowerCase().trim();
 
-  // if a verified user exists with same email, block.
   const verifiedUser = await UserModel.findOne({ email: normalizedEmail, isVerified: true });
   if (verifiedUser) {
     return res.status(400).json({ success: false, msg: "User already exists" });
   }
 
-  // If verified username exists, block
   const verifiedUsername = await UserModel.findOne({ username, isVerified: true });
   if (verifiedUsername) {
     return res.status(400).json({ success: false, msg: "Username already taken" });
   }
 
-  // generate OTP and expiry
   const verificationCode = generateOtp(6);
   const verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
@@ -172,20 +171,93 @@ const forgotPassword = async (req: Request<{}, {}, { email: string }>, res: Resp
 };
 
 // RESET PASSWORD
-const resetPassword = async (req: Request<{}, {}, { email: string; otp: string; newPassword: string }>, res: Response) => {
-  const { email, otp, newPassword } = req.body;
+// verifying OTP and issuing reset token
+const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string }>, res: Response) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ success: false, msg: "Email and OTP required" });
 
-  const user = await UserModel.findOne({ email, resetOtp: otp, resetOtpExpires: { $gt: new Date() } });
-  if (!user) return res.status(400).json({ success: false, msg: "Invalid or expired OTP" });
+  const normalizedEmail = String(email).toLowerCase().trim();
 
-  user.password = newPassword;
-  user.resetOtp = undefined;
-  user.resetOtpExpires = undefined;
-  await user.save();
+  try {
+    const user = await UserModel.findOne({
+      email: normalizedEmail,
+      resetOtp: otp,
+      resetOtpExpires: { $gt: new Date() },
+    });
 
-  return res.status(200).json({ success: true, msg: "Password reset successful" });
+    if (!user) return res.status(400).json({ success: false, msg: "Invalid or expired OTP" });
+
+    // Create a short-lived reset token (JWT). Ensure RESET_PASSWORD_TOKEN_SECRET is set in env.
+    const secret = process.env.RESET_PASSWORD_TOKEN_SECRET;
+    if (!secret) {
+      console.error("Missing RESET_PASSWORD_TOKEN_SECRET in env");
+      return res.status(500).json({ success: false, msg: "Server misconfiguration" });
+    }
+
+    const payload = { uid: String(user._id), ts: Date.now() };
+    const resetToken = jwt.sign(payload, secret, { expiresIn: "5m" }); // 5 minutes
+
+    return res.status(200).json({
+      success: true,
+      msg: "OTP verified",
+      resetToken,
+      expiresIn: 10 * 60, //60 sec
+    });
+  } catch (err) {
+    console.error("verifyResetOtp error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+//update password
+const updatePassword = async (req: Request<{}, {}, { resetToken: string; newPassword: string }>, res: Response) => {
+  const { resetToken, newPassword } = req.body;
+  if (!resetToken || !newPassword) return res.status(400).json({ success: false, msg: "resetToken and newPassword required" });
+
+  const secret = process.env.RESET_PASSWORD_TOKEN_SECRET;
+  if (!secret) {
+    console.error("Missing RESET_PASSWORD_TOKEN_SECRET in env");
+    return res.status(500).json({ success: false, msg: "Server misconfiguration" });
+  }
+
+  try {
+    // verify token
+    const decoded = jwt.verify(resetToken, secret) as { uid: string; ts?: number };
+    const userId = decoded.uid;
+    if (!userId) return res.status(400).json({ success: false, msg: "Invalid token" });
+
+    const user = await UserModel.findById(userId);
+    if (!user) return res.status(404).json({ success: false, msg: "User not found" });
+
+    if (!user.resetOtpExpires || new Date() > user.resetOtpExpires) {
+      return res.status(400).json({ success: false, msg: "Reset OTP expired — please request a new one" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+    user.password = hashed;
+
+    user.resetOtp = undefined as any;
+    user.resetOtpExpires = undefined as any;
+    user.refreshToken = undefined as any; 
+
+    await user.save();
+
+    return res.status(200).json({ success: true, msg: "Password updated successfully" });
+  } catch (err: any) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(400).json({ success: false, msg: "Reset token expired" });
+    }
+    if (err.name === "JsonWebTokenError") {
+      return res.status(400).json({ success: false, msg: "Invalid reset token" });
+    }
+    console.error("updatePassword error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
 };
 
 
 
-export { register, verifyEmail, resendVerification, login, forgotPassword, resetPassword };
+
+
+export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword };
