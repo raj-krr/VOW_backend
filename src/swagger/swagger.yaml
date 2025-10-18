@@ -412,11 +412,8 @@ components:
 
     UpdatePasswordRequest:
       type: object
-      required: [resetToken, newPassword]
+      required: [newPassword]
       properties:
-        resetToken:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         newPassword:
           type: string
           format: password
