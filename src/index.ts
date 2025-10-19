@@ -14,9 +14,18 @@ import UserModel from "./models/user";
 import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 
+
 const app: Application = express();
 app.use(express.json());
-app.use(cors());
+
+app.use(cors({
+  origin: [process.env.FRONTEND_URL as string, "http://localhost:5173"],
+
+  credentials: true,
+}));
+
+
+
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 

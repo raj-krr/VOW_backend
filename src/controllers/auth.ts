@@ -184,7 +184,9 @@ const forgotPassword = async (req: Request<{}, {}, { email: string }>, res: Resp
 };
 
 // RESET PASSWORD
-// verifying OTP and issuing reset token
+const JWT_EXPIRY_SECONDS = 5 * 60; // 5 minutes
+
+// VERIFY RESET OTP 
 const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string }>, res: Response) => {
   const { email, otp } = req.body;
   if (!email || !otp) return res.status(400).json({ success: false, msg: "Email and OTP required" });
@@ -206,17 +208,21 @@ const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string 
       return res.status(500).json({ success: false, msg: "Server misconfiguration" });
     }
 
-    const payload = {user :  user?._id as string, ts: Date.now() };
-    const resetToken = jwt.sign(payload, secret, { expiresIn: "5m" }); // 5 minutes
+    const payload = { user : user?._id as string, ts: Date.now()};
+    const resetToken = jwt.sign(payload, secret, { expiresIn: `${JWT_EXPIRY_SECONDS}s` });
 
-    return res.status(200).cookie("resetToken", resetToken, {  httpOnly: true,
-  secure: false,
-  sameSite: "none",
-  maxAge: 7 * 24 * 60 * 60 * 1000, }).json({
+    const secureFlag = process.env.NODE_ENV === "production";
+    res.cookie("resetToken", resetToken, {
+      httpOnly: true,
+      secure: secureFlag,
+      sameSite: secureFlag ? "none" : "lax",
+      maxAge: JWT_EXPIRY_SECONDS * 1000,
+    });
+
+    return res.status(200).json({
       success: true,
       msg: "OTP verified",
-      // resetToken,
-      expiresIn: 10 * 60, //60 sec
+      expiresIn: JWT_EXPIRY_SECONDS, // 5min
     });
   } catch (err) {
     console.error("verifyResetOtp error:", err);
@@ -224,12 +230,10 @@ const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string 
   }
 };
 
-//update password
+// UPDATE PASSWORD
 const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res: Response) => {
   const { newPassword } = req.body;
-  const resetToken = req.cookies?.resetToken || req.headers["x-reset-token"] as string;
-  console.log(req.cookies);
-  console.log("Reset Token:", resetToken);
+  const resetToken = (req.cookies && req.cookies.resetToken) || (req.headers["x-reset-token"] as string);
   if (!resetToken || !newPassword) return res.status(400).json({ success: false, msg: "resetToken and newPassword required" });
 
   const secret = process.env.RESET_PASSWORD_TOKEN_SECRET;
@@ -239,7 +243,6 @@ const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res
   }
 
   try {
-    // verify token
     const decoded = jwt.verify(resetToken, secret) as { user: string; ts?: number };
     const userId = decoded.user;
     if (!userId) return res.status(400).json({ success: false, msg: "Invalid token" });
@@ -259,12 +262,15 @@ const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res
 
     await user.save();
 
+    const secureFlag = process.env.NODE_ENV === "production";
+    res.clearCookie("resetToken", { httpOnly: true, secure: secureFlag, sameSite: "lax" });
+
     return res.status(200).json({ success: true, msg: "Password updated successfully" });
   } catch (err: any) {
-    if (err.name === "TokenExpiredError") {
+    if (err && err.name === "TokenExpiredError") {
       return res.status(400).json({ success: false, msg: "Reset token expired" });
     }
-    if (err.name === "JsonWebTokenError") {
+    if (err && err.name === "JsonWebTokenError") {
       return res.status(400).json({ success: false, msg: "Invalid reset token" });
     }
     console.error("updatePassword error:", err);
