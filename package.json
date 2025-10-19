@@ -39,7 +39,10 @@
     "mongoose": "^8.19.1",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.9",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0",
     "yamljs": "^0.3.0",
     "zod": "^4.1.12"
   }
