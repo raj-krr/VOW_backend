@@ -13,56 +13,26 @@ import cron from "node-cron";
 import UserModel from "./models/user";
 import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
-import http from "http";
-import { Server } from "socket.io";
+import meRouter from "./routes/meRoutes";
+
 
 const app: Application = express();
 
-// Middleware setup
+
 app.use(express.json());
 app.use(cors());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// Create HTTP server and attach Socket.IO
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
 
-// Test root route
-app.get("/", (req, res) => {
-  res.send("Server is up and running!");
-});
-
-// Socket.IO connection
-io.engine.on("connection_error", (err) => {
-  console.log("Socket.IO connection error:", err);
-});
-
-io.on("connection", (socket) => {
-  console.log("a user connected with id:", socket.id);
-  socket.on("joinRoom", (room) => {
-    socket.join(room);
-    console.log(`User with id: ${socket.id} joined room: ${room}`);
-  });
-  socket.on("disconnect", () => {
-    console.log("user disconnected with id:", socket.id);
-  });
-});
-
-// Swagger setup
 const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // API routes
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
+app.use("/me",meRouter);
 
-// Error handler
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
 
@@ -82,9 +52,9 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 8000;
 mongoDb()
   .then(() => {
-    server.listen(PORT, () => {
+    app.listen(PORT, () => {
       console.log(` Database connected successfully`);
-      console.log(` Server running with Socket.IO at http://localhost:${PORT}`);
+      console.log(` Server running  at http://localhost:${PORT}`);
       console.log(` Swagger Docs: http://localhost:${PORT}/api-docs`);
     });
   })

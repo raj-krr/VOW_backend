@@ -25,6 +25,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dicebear/collection": "^9.2.4",
+    "@dicebear/core": "^9.2.4",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "bcryptjs": "^3.0.2",
