@@ -14,10 +14,14 @@ import UserModel from "./models/user";
 import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
+import fileRouter from "./routes/fileRoutes";
 
 
 
 const app: Application = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 
 
 app.use(express.json());
@@ -41,6 +45,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me",meRouter);
+app.use("/files",fileRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
