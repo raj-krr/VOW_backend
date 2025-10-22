@@ -4,7 +4,7 @@ dotenv.config();
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
-import path, { parse } from "path";
+import path from "path";
 import cors from "cors";
 import mongoDb from "./libs/db";
 import AuthRoutes from "./routes/authroutes";
@@ -13,9 +13,13 @@ import cron from "node-cron";
 import UserModel from "./models/user";
 import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
+import meRouter from "./routes/meRoutes";
+
 
 
 const app: Application = express();
+
+
 app.use(express.json());
 
 app.use(cors({
@@ -29,23 +33,20 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+
 const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// API routes
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
-
-
-interface AppError extends Error {
-  statusCode?: number;
-  status?: number;
-}
+app.use("/me",meRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
 
   const error = err instanceof Error ? err : new Error("Unknown error");
-  const statusCode = (err as AppError).statusCode || (err as AppError).status || 500;
+  const statusCode = (err as any).statusCode || 500;
 
   if (res.headersSent) return next(err);
 
@@ -56,27 +57,32 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-const PORT: string | number = process.env.PORT || "8000";
-mongoDb().then(() => {
-  console.log("Database connected successfully");
-  console.log(`Server running at http://localhost:${PORT}`);
-  console.log(`Swagger Docs: http://localhost:${PORT}/api-docs`);
-}).catch((err) => {
-  console.error("Database connection failed", err);
-  process.exit(1);
-});
-app.listen(PORT);
+// Start server after DB connects
+const PORT = process.env.PORT || 8000;
+mongoDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(` Database connected successfully`);
+      console.log(` Server running  at http://localhost:${PORT}`);
+      console.log(` Swagger Docs: http://localhost:${PORT}/api-docs`);
+    });
+  })
+  .catch((err) => {
+    console.error("Database connection failed", err);
+    process.exit(1);
+  });
 
-cron.schedule("0 2 * * *", async () => { // 2am reset for unverified useres
+// Cron job: clean up unverified users daily at 2am
+cron.schedule("0 2 * * *", async () => {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   await UserModel.deleteMany({ isVerified: false, createdAt: { $lt: cutoff } });
-  console.log("purged stale unverified accounts");
+  console.log("🧹 Purged stale unverified accounts");
 });
 
-process.on("unhandledRejection", (reason: unknown, promise) => {
+// Error safety
+process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
-
-process.on("uncaughtException", (err: Error) => {
+process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
 });

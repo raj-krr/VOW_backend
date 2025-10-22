@@ -5,6 +5,7 @@ import { generateOtp } from "../utils/otp";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { options } from "../constant"
+import { de } from "zod/v4/locales";
 
 
 const sanitizeUser = (userDoc: IUser) => {
@@ -15,6 +16,7 @@ const sanitizeUser = (userDoc: IUser) => {
   delete user.resetOtpExpires;
   delete user.verificationCode;
   delete user.verificationCodeExpires;
+  delete user.__v;
   return user;
 };
 
