@@ -50,7 +50,9 @@ export const downloadFile = async (req: Request, res: Response): Promise<void> =
       res.status(404).json({ message: "File not found" });
       return;
     }
-    res.redirect(file.url);
+    // res.redirect(file.url);
+    res.status(200).json({ url: file.url });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Download failed" });
