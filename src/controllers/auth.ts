@@ -228,7 +228,7 @@ const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string 
     res.cookie("resetToken", resetToken, {
       httpOnly: true,
       secure: secureFlag,
-      sameSite: "none",
+      sameSite: "lax",
       maxAge: JWT_EXPIRY_SECONDS * 1000,
     });
 
