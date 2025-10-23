@@ -41,6 +41,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me",meRouter);
+app.use("/rooms", require("./routes/roomRoutes").default);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
