@@ -14,6 +14,8 @@ import UserModel from "./models/user";
 import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
+import roomRoutes from "./routes/roomRoutes";
+import chatRoutes from "./routes/chatRoutes";
 
 
 
@@ -41,7 +43,8 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me",meRouter);
-app.use("/rooms", require("./routes/roomRoutes").default);
+app.use("/rooms", roomRoutes);
+app.use("/chat", chatRoutes);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
