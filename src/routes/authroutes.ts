@@ -8,8 +8,6 @@ import {
   verifyEmailSchema,
   loginSchema,
   forgetPasswordSchema,
-  resetPasswordSchema,
-  logoutSchema
 } from "../schemas/auth";
 
 const AuthRoutes = express.Router();

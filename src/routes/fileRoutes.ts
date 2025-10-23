@@ -10,8 +10,8 @@ import {
 const fileRouter = Router();
 
 fileRouter.get("/", getAllFiles);
-fileRouter.post("/upload", upload.single("file"), uploadFile);
-fileRouter.get("/download/:id", downloadFile);
+fileRouter.post("/upload",  upload.single("file"), uploadFile);
+fileRouter.get("/download/:id",  downloadFile);
 fileRouter.delete("/delete/:id", deleteFile);
 
 export default fileRouter;

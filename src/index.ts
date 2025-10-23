@@ -15,7 +15,7 @@ import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
 import fileRouter from "./routes/fileRoutes";
-
+import workspaceRouter from "./routes/workspaceRoute";
 
 
 const app: Application = express();
@@ -46,6 +46,7 @@ app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me",meRouter);
 app.use("/files",fileRouter);
+app.use("/workspaces",workspaceRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
