@@ -4,7 +4,7 @@ info:
   version: "1.0.0"
   description: Authentication endpoints: register, verify email, resend code, login, forgot/reset password.
 servers:
-  - url: http://localhost:4400
+  - url: https://vow-org.me
     description: AWS deployed server
 
 tags:
