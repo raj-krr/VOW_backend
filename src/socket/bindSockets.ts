@@ -2,7 +2,7 @@ import { createServer, get, Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { getRedis } from "../libs/redis";
-import { createAdapter } from "socket.io-redis";
+import { createAdapter } from "@socket.io/redis-adapter";
 import Channel from "../models/chat/channel";
 import Message from "../models/chat/message";
 
