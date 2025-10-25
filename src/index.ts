@@ -16,6 +16,8 @@ import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
 import fileRouter from "./routes/fileRoutes";
 import workspaceRouter from "./routes/workspaceRoute";
+import managerRouter from "./routes/managerRoutes";
+import superviserRouter from "./routes/superviserRoute";
 
 
 const app: Application = express();
@@ -27,9 +29,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use(cors({
-  // origin: [process.env.FRONTEND_URL as string, "http://localhost:5173"] ,
+  origin: [process.env.FRONTEND_URL as string, "http://localhost:5173"] ,
 
-  // credentials: true,
+  credentials: true,
 }));
 
 
@@ -47,6 +49,8 @@ app.use("/", healthRoutes);
 app.use("/me",meRouter);
 app.use("/files",fileRouter);
 app.use("/workspaces",workspaceRouter);
+app.use("/manager",managerRouter);
+app.use("/superviser" ,superviserRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);

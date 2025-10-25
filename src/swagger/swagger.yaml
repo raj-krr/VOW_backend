@@ -4,7 +4,7 @@ info:
   version: "1.0.0"
   description: Authentication endpoints + file upload, download, delete using Cloudinary. Metadata stored in MongoDB.
 servers:
-  - url: https://rhcxw2q9-4000.inc1.devtunnels.ms/
+  - url: http://localhost:4000
     description: Local server
 
 tags:
