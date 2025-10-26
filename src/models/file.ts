@@ -4,7 +4,7 @@ import UserModel from "./user";
 export interface IFile extends Document {
   filename: string;
   url: string;
-  cloudinaryId: string;
+  s3FileId: string;
   size: number;
   mimeType: string;
   createdAt: Date;
@@ -15,7 +15,7 @@ const fileSchema = new Schema<IFile>(
   {
     filename: { type: String, required: true },
     url: { type: String, required: true },
-    cloudinaryId: { type: String, required: true },
+    s3FileId: { type: String, required: true },
     size: { type: Number, required: true },
     mimeType: { type: String, required: true },
   },
