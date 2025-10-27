@@ -11,30 +11,27 @@ import AuthRoutes from "./routes/authroutes";
 import healthRoutes from "./routes/healthroutes";
 import cron from "node-cron";
 import UserModel from "./models/user";
-import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
-import roomRoutes from "./routes/roomRoutes";
-import chatRoutes from "./routes/chatRoutes";
 
+import http from "http";
+import { initSocket } from "./sockets";
 
+import serverRoutes from "./routes/serverRoutes";
+import channelRoutes from "./routes/channelRoutes";
+import messageRoutes from "./routes/messageRoutes";
 
 const app: Application = express();
-
 
 app.use(express.json());
 
 app.use(cors({
   origin: [process.env.FRONTEND_URL as string, "http://localhost:5173"],
-
   credentials: true,
 }));
 
-
-
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
-
 
 const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -42,9 +39,11 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 // API routes
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
-app.use("/me",meRouter);
-app.use("/rooms", roomRoutes);
-app.use("/chat", chatRoutes);
+app.use("/me", meRouter);
+
+app.use("/api/servers", serverRoutes);
+app.use("/api/channels", channelRoutes);
+app.use("/api/messages", messageRoutes);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
@@ -57,7 +56,7 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   res.status(statusCode).json({
     success: false,
     msg: error.message,
-    ...(process.env.NODE_ENV !== "production" ? { stack: error.stack } : {}),
+    ...(process.env.NODE_ENV !== "production" ? { stack: (error as any).stack } : {}),
   });
 });
 
@@ -65,7 +64,10 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 8000;
 mongoDb()
   .then(() => {
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    const io = initSocket(server);
+
+    server.listen(PORT, () => {
       console.log(` Database connected successfully`);
       console.log(` Server running  at http://localhost:${PORT}`);
       console.log(` Swagger Docs: http://localhost:${PORT}/api-docs`);
