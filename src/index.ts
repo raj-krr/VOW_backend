@@ -4,6 +4,7 @@ dotenv.config();
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
+import deepmerge from "deepmerge";
 import path from "path";
 import cors from "cors";
 import mongoDb from "./libs/db";
@@ -40,8 +41,13 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 
-const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+const baseDoc = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml")) ;
+const workspaceDoc = YAML.load(path.resolve(__dirname, "swagger", "workspace.yaml")) ;
+
+const mergedDoc = deepmerge(baseDoc, workspaceDoc) ;
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
+
 
 // API routes
 app.use("/auth", AuthRoutes);
