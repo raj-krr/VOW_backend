@@ -5,8 +5,8 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://localhost:4000/api
-    description: Local server
+  - url: https://vow-org.me
+    description: AWS deployed server
 
 components:
   securitySchemes:
@@ -54,7 +54,7 @@ security:
   - BearerAuth: []
 
 paths:
-  /workspace/create:
+  /workspaces/create:
     post:
       summary: Create workspace (Admin only)
       tags: [Workspace]
@@ -81,7 +81,7 @@ paths:
         '401':
           description: Unauthorized
 
-  /workspace/join:
+  /workspaces/join:
     post:
       summary: Join workspace using invite code
       tags: [Workspace]
@@ -103,7 +103,7 @@ paths:
         '404':
           description: Invalid invite code
 
-  /workspace/details:
+  /workspaces/details:
     get:
       summary: Get all workspaces for logged-in user
       tags: [Workspace]
@@ -124,7 +124,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/Workspace'
 
-  /workspace/{workspaceId}/rejoin:
+  /workspaces/{workspaceId}/rejoin:
     get:
       summary: Rejoin workspace using workspace token
       tags: [Workspace]
@@ -138,7 +138,7 @@ paths:
         '200':
           description: Workspace rejoined successfully
 
-  /workspace/{workspaceId}/members:
+  /workspaces/{workspaceId}/members:
     get:
       summary: Get all members of a workspace
       tags: [Workspace]
@@ -163,7 +163,7 @@ paths:
                     items:
                       type: string
 
-  /workspace/{workspaceId}:
+  /workspaces/{workspaceId}:
     delete:
       summary: Delete workspace (Admin only)
       tags: [Workspace]

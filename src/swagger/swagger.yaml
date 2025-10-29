@@ -4,8 +4,8 @@ info:
   version: "1.0.0"
   description: Authentication endpoints + file upload, download, delete using Cloudinary. Metadata stored in MongoDB.
 servers:
-  - url: http://localhost:4000
-    description: Local server
+  - url: https://vow-org.me
+    description: AWS deployed server
 
 tags:
   - name: Auth
