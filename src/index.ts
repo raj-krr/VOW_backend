@@ -22,7 +22,7 @@ import workspaceRouter from "./routes/workspaceRoute";
 import managerRouter from "./routes/managerRoutes";
 import superviserRouter from "./routes/superviserRoute";
 
-import serverRoutes from "./routes/serverRoutes";
+// import serverRoutes from "./routes/serverRoutes";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 
@@ -56,7 +56,7 @@ app.use("/", healthRoutes);
 app.use("/me", meRouter);
 app.use("/files",fileRouter);
 
-app.use("/api/servers", serverRoutes);
+// app.use("/api/servers", serverRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/workspaces",workspaceRouter);

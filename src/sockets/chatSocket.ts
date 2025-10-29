@@ -1,7 +1,7 @@
 import { Server, Socket } from "socket.io";
 import Message from "../models/message";
 import Channel from "../models/channel";
-import ServerModel from "../models/server";
+import Workspace from "../models/workspace";
 import { verifySocketToken, getTokenFromSocket } from "./auth";
 
 export default function chatSocket(io: Server) {
@@ -14,7 +14,7 @@ export default function chatSocket(io: Server) {
       socket.join(`user:${user._id}`);
 
       socket.on("join_server", async (serverId: string) => {
-        const server = await ServerModel.findById(serverId);
+        const server = await Workspace.findById(serverId);
         if (!server) return socket.emit("error", "Server not found");
         if (server.members.map((m) => String(m)).includes(String(user._id))) {
           socket.join(`server:${serverId}`);
