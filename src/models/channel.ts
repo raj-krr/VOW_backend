@@ -1,14 +1,14 @@
 import mongoose, { Document, Schema } from "mongoose";
 import { IUser } from "./user";
-import { IServer } from "./server";
+import workspace from "./workspace";
 
 export type ChannelType = "text" | "voice";
 
 export interface IChannel extends Document {
   name: string;
   type: ChannelType;
-  server: IServer["_id"];
-  members: IUser["_id"][];
+  server:mongoose.Types.ObjectId ;
+  members:mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
