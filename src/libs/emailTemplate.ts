@@ -70,7 +70,7 @@ export const getVerificationEmailTemplate = (verificationCode: string): string =
             <p>If you did not create an account, no further action is required. If you have any questions, feel free to contact our support team.</p>
         </div>
         <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} Your Company. All rights reserved.</p>
+            <p>&copy; ${new Date().getFullYear()} vow-org.me. All rights reserved.</p>
         </div>
     </div>
 </body>
@@ -162,7 +162,7 @@ export const getWelcomeEmailTemplate = (username: string): string => `
             <p>If you need any help, don’t hesitate to contact us. We’re here to support you every step of the way.</p>
         </div>
         <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} Your Company. All rights reserved.</p>
+            <p>&copy; ${new Date().getFullYear()} vow-org.me. All rights reserved.</p>
         </div>
     </div>
 </body>
