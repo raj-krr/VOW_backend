@@ -1,6 +1,6 @@
 import rateLimit from "express-rate-limit";
-import Redis from "ioredis";
 import { Request, Response, NextFunction } from "express";
+import { getRedis } from "../libs/redis";
 
 export const ipLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -13,10 +13,11 @@ export const ipLimiter = rateLimit({
 const EMAIL_WINDOW_MS = 10 * 60 * 1000;
 const EMAIL_MAX = 1;
 
-let redis: Redis | null = null;
-if (process.env.REDIS_URL) {
-  redis = new Redis(process.env.REDIS_URL);
-}
+// let redis: Redis | null = null;
+// if (process.env.REDIS_URL) {
+//   redis = new Redis(process.env.REDIS_URL);
+// }
+const redis = getRedis();
 
 const emailMap = new Map<string, number>();
 
