@@ -48,3 +48,22 @@ export const sendResetOtpEmail = async (email: string, otp: string) => {
     `,
   });
 };
+
+//workspace invite email
+export const sendInviteEmail = async (email: string, inviterName: string, workspaceName: string, inviteCode: string): Promise<void> => {
+  try {
+    await transporter.sendMail({
+      from: `"${inviterName}" <${process.env.EMAIL}>`,
+      to: email,
+      subject: "You've been invited to join a workspace",
+      html: `
+        <h2>Join Workspace</h2>
+        <p>${inviterName} has invited you to join the workspace "${workspaceName}".</p>
+        <p>Use the code below to accept the invitation:</p>
+        <h1 style="letter-spacing:3px">${inviteCode}</h1>
+      `,
+    });
+  } catch (error) {
+    console.error("Error sending invite email:", error);
+  }
+};

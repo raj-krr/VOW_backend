@@ -1,8 +1,6 @@
 import { Request, Response } from "express";
 import UserModel, { IUser } from "../models/user";
 import { ApiError } from "../utils/ApiError";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs"; 
 
 const sanitizeUser = (userDoc: IUser) => {
   const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
@@ -17,7 +15,7 @@ const sanitizeUser = (userDoc: IUser) => {
 };
 
 
-const updateProfileAndAvatar = async (req: Request, res: Response) => {
+const updateProfileAndAvatar = async (req: Request, res: Response) : Promise<void>=> {
   try {
     const userId = req.user?._id;
     if (!userId) throw new ApiError(401, "Unauthorized");
@@ -56,7 +54,7 @@ const updateProfileAndAvatar = async (req: Request, res: Response) => {
   }
 };
 
-const getUserProfile = async (req: Request, res: Response) => {
+const getUserProfile = async (req: Request, res: Response) :Promise<void>=> {
   try {
     const user = req.user;
     if (!user) throw new ApiError(401, "Unauthorized");

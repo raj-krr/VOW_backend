@@ -4,6 +4,7 @@ dotenv.config();
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
+import deepmerge from "deepmerge";
 import path from "path";
 import cors from "cors";
 import mongoDb from "./libs/db";
@@ -13,37 +14,54 @@ import cron from "node-cron";
 import UserModel from "./models/user";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
+import fileRouter from "./routes/fileRoutes";
 
 import http from "http";
 import { initSocket } from "./sockets";
+import workspaceRouter from "./routes/workspaceRoute";
+import managerRouter from "./routes/managerRoutes";
+import superviserRouter from "./routes/superviserRoute";
 
 import serverRoutes from "./routes/serverRoutes";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 
 const app: Application = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 
 app.use(express.json());
 
 app.use(cors({
   origin: [process.env.FRONTEND_URL as string, "http://localhost:5173"],
+
   credentials: true,
 }));
 
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+const baseDoc = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml")) ;
+const workspaceDoc = YAML.load(path.resolve(__dirname, "swagger", "workspace.yaml")) ;
+
+const mergedDoc = deepmerge(baseDoc, workspaceDoc) ;
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
+
 
 // API routes
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me", meRouter);
+app.use("/files",fileRouter);
 
 app.use("/api/servers", serverRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/workspaces",workspaceRouter);
+app.use("/manager",managerRouter);
+app.use("/superviser" ,superviserRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
