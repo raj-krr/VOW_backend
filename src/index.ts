@@ -4,6 +4,7 @@ dotenv.config();
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
+import deepmerge from "deepmerge";
 import path from "path";
 import cors from "cors";
 import mongoDb from "./libs/db";
@@ -11,13 +12,23 @@ import AuthRoutes from "./routes/authroutes";
 import healthRoutes from "./routes/healthroutes";
 import cron from "node-cron";
 import UserModel from "./models/user";
-import { ApiError } from "./utils/ApiError";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
+import fileRouter from "./routes/fileRoutes";
 
+import http from "http";
+import { initSocket } from "./sockets";
+import workspaceRouter from "./routes/workspaceRoute";
+import managerRouter from "./routes/managerRoutes";
+import superviserRouter from "./routes/superviserRoute";
 
+import serverRoutes from "./routes/serverRoutes";
+import channelRoutes from "./routes/channelRoutes";
+import messageRoutes from "./routes/messageRoutes";
 
 const app: Application = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 
 app.use(express.json());
@@ -28,19 +39,29 @@ app.use(cors({
   credentials: true,
 }));
 
-
-
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+const baseDoc = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml")) ;
+const workspaceDoc = YAML.load(path.resolve(__dirname, "swagger", "workspace.yaml")) ;
 
-const swaggerDocument = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml"));
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+const mergedDoc = deepmerge(baseDoc, workspaceDoc) ;
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
+
 
 // API routes
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
-app.use("/me",meRouter);
+app.use("/me", meRouter);
+app.use("/files",fileRouter);
+
+app.use("/api/servers", serverRoutes);
+app.use("/api/channels", channelRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/workspaces",workspaceRouter);
+app.use("/manager",managerRouter);
+app.use("/superviser" ,superviserRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
@@ -53,7 +74,7 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   res.status(statusCode).json({
     success: false,
     msg: error.message,
-    ...(process.env.NODE_ENV !== "production" ? { stack: error.stack } : {}),
+    ...(process.env.NODE_ENV !== "production" ? { stack: (error as any).stack } : {}),
   });
 });
 
@@ -61,7 +82,10 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 8000;
 mongoDb()
   .then(() => {
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    const io = initSocket(server);
+
+    server.listen(PORT, () => {
       console.log(` Database connected successfully`);
       console.log(` Server running  at http://localhost:${PORT}`);
       console.log(` Swagger Docs: http://localhost:${PORT}/api-docs`);

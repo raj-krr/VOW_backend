@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Auth API
+  title: Auth + File Management API
   version: "1.0.0"
-  description: Authentication endpoints: register, verify email, resend code, login, forgot/reset password.
+  description: Authentication endpoints + file upload, download, delete using Cloudinary. Metadata stored in MongoDB.
 servers:
   - url: https://vow-org.me
     description: AWS deployed server
@@ -10,8 +10,13 @@ servers:
 tags:
   - name: Auth
     description: Authentication and user account routes
+  - name: me
+    description: Current user profile routes
+  - name: Files
+    description: File upload/download/delete routes
 
 paths:
+  # ------------------- AUTH -------------------
   /auth/register:
     post:
       tags: [Auth]
@@ -51,7 +56,7 @@ paths:
   /auth/verifyemail:
     post:
       tags: [Auth]
-      summary: Verify an email using the verification code (OTP)
+      summary: Verify email using OTP
       requestBody:
         required: true
         content:
@@ -66,7 +71,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
         '400':
-          description: Invalid or expired code / bad request
+          description: Invalid or expired OTP
           content:
             application/json:
               schema:
@@ -81,7 +86,7 @@ paths:
   /auth/resend:
     post:
       tags: [Auth]
-      summary: Resend verification code for an unverified email
+      summary: Resend verification code
       requestBody:
         required: true
         content:
@@ -96,7 +101,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
         '400':
-          description: Already verified or missing email
+          description: Already verified / missing email
           content:
             application/json:
               schema:
@@ -108,7 +113,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Failed to send verification email
+          description: Failed to send email
           content:
             application/json:
               schema:
@@ -126,7 +131,7 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Login successful — returns tokens and sanitized user
+          description: Login successful — returns tokens and user
           content:
             application/json:
               schema:
@@ -147,7 +152,7 @@ paths:
   /auth/forgetpassword:
     post:
       tags: [Auth]
-      summary: Send an OTP for password reset to the user's email
+      summary: Send OTP to reset password
       requestBody:
         required: true
         content:
@@ -156,7 +161,7 @@ paths:
               $ref: '#/components/schemas/ForgotPasswordRequest'
       responses:
         '200':
-          description: OTP sent to email
+          description: OTP sent
           content:
             application/json:
               schema:
@@ -177,8 +182,7 @@ paths:
   /auth/verifyresetotp:
     post:
       tags: [Auth]
-      summary: Verify reset OTP (first step in two-step reset flow)
-      description: Verifies the OTP sent by email. If valid, returns a short-lived `resetToken` that the client can use to update password.
+      summary: Verify reset OTP and get short-lived resetToken
       requestBody:
         required: true
         content:
@@ -187,13 +191,13 @@ paths:
               $ref: '#/components/schemas/VerifyResetOtpRequest'
       responses:
         '200':
-          description: OTP verified — reset token returned
+          description: OTP verified
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerifyResetOtpSuccess'
         '400':
-          description: Invalid or expired OTP / bad request
+          description: Invalid OTP
           content:
             application/json:
               schema:
@@ -214,8 +218,7 @@ paths:
   /auth/updatepassword:
     post:
       tags: [Auth]
-      summary: Update password using reset token obtained from verifyresetotp
-      description: Client exchanges the `resetToken` and `newPassword` to update the user's password.
+      summary: Update password using resetToken
       requestBody:
         required: true
         content:
@@ -224,19 +227,19 @@ paths:
               $ref: '#/components/schemas/UpdatePasswordRequest'
       responses:
         '200':
-          description: Password updated successfully
+          description: Password updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
         '400':
-          description: Invalid or expired token / bad request
+          description: Invalid / expired token
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Unauthorized / invalid token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -254,6 +257,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # ------------------- ME -------------------
   /me/updateprofile:
     post:
       tags: [me]
@@ -268,7 +272,7 @@ paths:
               $ref: '#/components/schemas/UpdateProfileRequest'
       responses:
         '200':
-          description: Profile and avatar updated successfully
+          description: Profile updated
           content:
             application/json:
               schema:
@@ -297,15 +301,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
   /me/info:
     get:
       tags: [me]
-      summary: Get user profile information
+      summary: Get user profile info
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: User profile retrieved successfully
+          description: User profile retrieved
           content:
             application/json:
               schema:
@@ -328,6 +333,109 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  # ------------------- FILES -------------------
+  /files:
+    get:
+      tags: [Files]
+      summary: Get all uploaded files
+      responses:
+        '200':
+          description: List of uploaded files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/File'
+
+  /files/upload:
+    post:
+      tags: [Files]
+      summary: Upload a new file to Cloudinary
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadSuccess'
+        '400':
+          description: Missing file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upload failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /files/download/{id}:
+    get:
+      tags: [Files]
+      summary: Download file by ID (redirect to Cloudinary)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB file ID
+      responses:
+        '302':
+          description: Redirect to file URL
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /files/delete/{id}:
+    delete:
+      tags: [Files]
+      summary: Delete a file from Cloudinary and MongoDB
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB file ID
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Deletion failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -437,24 +545,6 @@ components:
           type: string
           format: date-time
 
-    # Keep for backward compatibility if you still want it
-    ResetPasswordRequest:
-      type: object
-      required: [email, otp, newPassword]
-      properties:
-        email:
-          type: string
-          format: email
-          example: user@example.com
-        otp:
-          type: string
-          example: "123456"
-        newPassword:
-          type: string
-          format: password
-          example: NewStrongP@ss1
-
-    # Two-step flow schemas (match your verifyresetotp & updatepassword routes)
     VerifyResetOtpRequest:
       type: object
       required: [email, otp]
@@ -481,7 +571,6 @@ components:
           description: Short-lived token (use on /auth/updatepassword)
         expiresIn:
           type: integer
-          description: Token TTL in seconds
           example: 600
 
     UpdatePasswordRequest:
@@ -543,23 +632,43 @@ components:
           example: "John Doe"
         organisation:
           type: string
-          example: "Acme Corp"  
+          example: "Acme Corp"
         gender:
           type: string
-          enum: [ male, female, other ]
-          example: male 
+          enum: [male, female, other]
+          example: male
         dob:
           type: string
           format: date
-          example: "1990-01-01" 
+          example: "1990-01-01"
 
-security:
-  - bearerAuth: []
+    File:
+      type: object
+      properties:
+        _id:
+          type: string
+        filename:
+          type: string
+        url:
+          type: string
+        cloudinaryId:
+          type: string
+        size:
+          type: integer
+        mimeType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
-
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    FileUploadSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "File uploaded successfully"
+        file:
+          $ref: '#/components/schemas/File'
