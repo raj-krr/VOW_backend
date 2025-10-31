@@ -46,9 +46,13 @@ app.use(express.urlencoded({ extended: true }));
 
 const baseDoc = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml")) ;
 const workspaceDoc = YAML.load(path.resolve(__dirname, "swagger", "workspace.yaml")) ;
+const meetingDoc = YAML.load(path.resolve(__dirname, "swagger", "meeting.yaml")) ;
+const mapDoc = YAML.load(path.resolve(__dirname, "swagger", "map.yaml")) ;
+const msgDoc = YAML.load(path.resolve(__dirname, "swagger", "msg.yaml")) ;
+
 // const chatDoc = YAML.load(path.resolve(__dirname, "swagger", "chat.yaml")) ;
 
-const mergedDoc = deepmerge(baseDoc, workspaceDoc) ;
+const mergedDoc = deepmerge.all([baseDoc, workspaceDoc]) ;
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
 
@@ -60,14 +64,14 @@ app.use("/me", meRouter);
 app.use("/files",fileRouter);
 
 // app.use("/api/servers", serverRoutes);
-app.use("/api/channels", channelRoutes);
-app.use("/api/messages", messageRoutes);
+app.use("/channels", channelRoutes);
+app.use("/messages", messageRoutes);
 app.use("/workspaces",workspaceRouter);
 app.use("/manager",managerRouter);
 app.use("/superviser" ,superviserRouter);
 
-app.use("/api/maps", mapRoutes);
-app.use("/api/rooms", roomRoutes);
+app.use("/maps", mapRoutes);
+app.use("/", roomRoutes);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);

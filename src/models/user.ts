@@ -14,7 +14,7 @@ export interface IUser extends Document {
   refreshToken?: string;
   createdAt: Date;
   updatedAt: Date;
-
+refreshTokenExpires :Date;
   fullName?: string;
   organisation?: string;
   gender?: "male" | "female" | "other";
@@ -43,7 +43,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     resetOtp: { type: String },
     resetOtpExpires: { type: Date },
     refreshToken: { type: String },
-
+refreshTokenExpires:{ type :Date},
     fullName: { type: String },
   organisation: { type: String },
   gender: { type: String, enum: ["male", "female", "other"] },

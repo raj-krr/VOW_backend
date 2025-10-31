@@ -5,7 +5,7 @@ info:
   description: Authentication endpoints + file upload, download, delete using Cloudinary. Metadata stored in MongoDB.
 servers:
   - url: https://vow-org.me
-    description: AWS deployed server
+    description: AWS development server
 
 tags:
   - name: Auth

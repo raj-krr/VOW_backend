@@ -3,3 +3,4 @@ node_modules
 dist
 api_postman.json
 .github/workflows/ci-cd.yml
+config

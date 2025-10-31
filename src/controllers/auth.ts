@@ -294,8 +294,35 @@ const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res
   }
 };
 
+const logout = async (req: Request, res: Response) => {
+  try {
+    const refreshToken =
+      req.cookies?.refreshToken ||
+      (req.headers["x-refresh-token"] as string);
 
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, msg: "No refresh token provided" });
+    }
+    const user = await UserModel.findOne({ refreshToken });
 
+    if (!user) {
+      res.cookie("accessToken","invalid" ,options);
+      res.cookie("refreshToken","invalid" ,options);
+      return res.status(200).json({ success: true, msg: "Logged out successfully" });
+    }
 
+    user.refreshToken = undefined as any;
+    user.refreshTokenExpires = new Date(Date.now()); // expire immediately
+    await user.save();
 
-export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword };
+    res.cookie("accessToken","invalid", options);
+    res.cookie("refreshToken", "invalid",options );
+
+    return res.status(200).json({ success: true, msg: "Logged out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword, logout };

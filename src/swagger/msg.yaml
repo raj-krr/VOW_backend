@@ -1,0 +1,415 @@
+openapi: 3.0.3
+info:
+  title: VOW Realtime Communication API
+  version: "1.0.0"
+  description: >
+    REST API for managing rooms, channels, and messages in the VOW platform.  
+    All endpoints require JWT authentication unless noted otherwise.
+
+servers:
+  - url:  https://vow-org.me
+    description: AWS development server
+
+tags:
+  - name: Channels
+    description: Manage text or voice channels in a workspace
+  - name: Messages
+    description: Send and retrieve messages in channels
+  - name: Rooms
+    description: Manage real-time rooms and presence
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Channel:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6512cf1b12b1f8a76d5ac91e
+        name:
+          type: string
+          example: "general"
+        type:
+          type: string
+          enum: [text, voice]
+        server:
+          type: string
+          description: Workspace (server) ID
+        members:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        _id:
+          type: string
+        channelId:
+          type: string
+        sender:
+          type: string
+        content:
+          type: string
+          example: "Hello team!"
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                example: "https://cdn.example.com/file.png"
+              filename:
+                type: string
+                example: "file.png"
+        createdAt:
+          type: string
+          format: date-time
+
+    Room:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+          example: "Team Meeting Room"
+        slug:
+          type: string
+          example: "team-meeting-room"
+        description:
+          type: string
+          example: "Private room for team meetings"
+        isPrivate:
+          type: boolean
+          example: false
+        createdBy:
+          type: string
+          description: User ID of room creator
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+security:
+  - BearerAuth: []
+
+paths:
+  /channels:
+    post:
+      tags: [Channels]
+      summary: Create a new channel
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, workspaceId]
+              properties:
+                name:
+                  type: string
+                  example: "general"
+                type:
+                  type: string
+                  enum: [text, voice]
+                  example: text
+                workspaceId:
+                  type: string
+                  example: 6539c2e0a9a2f3b4de1f4e12
+                members:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Channel created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        "500":
+          description: Server error
+
+  /channels/workspace/{workspaceId}:
+    get:
+      tags: [Channels]
+      summary: Get all channels for a workspace
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+        "500":
+          description: Server error
+
+  /messages:
+    post:
+      tags: [Messages]
+      summary: Send a message in a channel
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelId, content]
+              properties:
+                channelId:
+                  type: string
+                content:
+                  type: string
+                attachments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      filename:
+                        type: string
+      responses:
+        "201":
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "500":
+          description: Server error
+
+  /messages/channel/{channelId}:
+    get:
+      tags: [Messages]
+      summary: Get all messages in a channel
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+        "500":
+          description: Server error
+
+  /rooms:
+    get:
+      tags: [Rooms]
+      summary: List all rooms (public or user-created)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: mine
+          in: query
+          required: false
+          schema:
+            type: boolean
+            example: true
+      responses:
+        "200":
+          description: Rooms retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  rooms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Room"
+        "401":
+          description: Unauthorized
+
+  /rooms/{id}:
+    get:
+      tags: [Rooms]
+      summary: Get room details by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+
+  /rooms/by-slug/{slug}:
+    get:
+      tags: [Rooms]
+      summary: Get room details by slug
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+
+  /rooms/{id}/join:
+    post:
+      tags: [Rooms]
+      summary: Join a room and receive a session token
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  example: "Raj Kumar"
+                role:
+                  type: string
+                  example: "participant"
+                sessionId:
+                  type: string
+      responses:
+        "200":
+          description: Joined room successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  ttlSeconds:
+                    type: number
+                  roomId:
+                    type: string
+                  displayName:
+                    type: string
+                  role:
+                    type: string
+        "404":
+          description: Room not found
+        "401":
+          description: Unauthorized
+
+  /rooms/{id}/leave:
+    post:
+      tags: [Rooms]
+      summary: Leave a room
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Left room successfully
+        "401":
+          description: Unauthorized
+
+  /rooms/{id}/presence:
+    get:
+      tags: [Rooms]
+      summary: Get current presence in a room
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of active users in room
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  presence:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId:
+                          type: string
+                        displayName:
+                          type: string
+                        role:
+                          type: string
+        "401":
+          description: Unauthorized
