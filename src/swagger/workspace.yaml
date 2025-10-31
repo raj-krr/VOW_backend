@@ -1,0 +1,388 @@
+openapi: 3.0.3
+info:
+  title: VOW Backend API
+  description: API documentation for Workspace & Team Management System (Admin, Supervisor, Members).
+  version: 1.0.0
+
+servers:
+  - url:  https://vow-org.me
+    description: AWS development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Workspace:
+      type: object
+      properties:
+        _id:
+          type: string
+        workspaceName:
+          type: string
+        inviterName:
+          type: string
+        manager:
+          type: string
+        members:
+          type: array
+          items:
+            type: string
+        inviteCode:
+          type: string
+
+    Team:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        workspaceId:
+          type: string
+        members:
+          type: array
+          items:
+            type: string
+        superviser:
+          type: [string, 'null']
+
+security:
+  - BearerAuth: []
+
+paths:
+  /workspaces/create:
+    post:
+      summary: Create workspace (Admin only)
+      tags: [Workspace]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceName]
+              properties:
+                workspaceName:
+                  type: string
+                inviteEmails:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+      responses:
+        '200':
+          description: Workspace created successfully
+        '401':
+          description: Unauthorized
+
+  /workspaces/join:
+    post:
+      summary: Join workspace using invite code
+      tags: [Workspace]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inviteCode]
+              properties:
+                inviteCode:
+                  type: string
+      responses:
+        '200':
+          description: Joined workspace successfully
+        '404':
+          description: Invalid invite code
+
+  /workspaces/details:
+    get:
+      summary: Get all workspaces for logged-in user
+      tags: [Workspace]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  workspaces:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workspace'
+
+  /workspaces/{workspaceId}/rejoin:
+    get:
+      summary: Rejoin workspace using workspace token
+      tags: [Workspace]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace rejoined successfully
+
+  /workspaces/{workspaceId}/members:
+    get:
+      summary: Get all members of a workspace
+      tags: [Workspace]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  members:
+                    type: array
+                    items:
+                      type: string
+
+  /workspaces/{workspaceId}:
+    delete:
+      summary: Delete workspace (Admin only)
+      tags: [Workspace]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Workspace deleted successfully
+        '403':
+          description: Only admin can delete workspace
+
+  /manager/team/create/{workspaceId}:
+    post:
+      summary: Create new team (Admin only)
+      tags: [Team - Admin]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                superviser:
+                  type: string
+      responses:
+        '201':
+          description: Team created successfully
+        '403':
+          description: Only admin can create team
+
+  /manager/team/all/{workspaceId}:
+    get:
+      summary: Get all teams in workspace (Admin)
+      tags: [Team - Admin]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of teams
+
+  /manager/team/rename/{workspaceId}/{teamId}:
+    put:
+      summary: Rename a team (Admin or Supervisor)
+      tags: [Team - Admin]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newName]
+              properties:
+                newName:
+                  type: string
+      responses:
+        '200':
+          description: Team renamed successfully
+        '403':
+          description: Permission denied
+
+  /manager/team/remove-member/{workspaceId}/{teamId}:
+    put:
+      summary: Remove member from team (Admin or Supervisor)
+      tags: [Team - Admin]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId]
+              properties:
+                memberId:
+                  type: string
+      responses:
+        '200':
+          description: Member removed successfully
+        '403':
+          description: Permission denied
+
+  /manager/team/assign-lead/{workspaceId}/{teamId}:
+    put:
+      summary: Assign team lead (Admin only)
+      tags: [Team - Admin]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [leadId]
+              properties:
+                leadId:
+                  type: string
+      responses:
+        '200':
+          description: Team lead assigned
+        '403':
+          description: Only admin can assign lead
+
+  /superviser/team/all/{workspaceId}:
+    get:
+      summary: Get all teams (Supervisor)
+      tags: [Team - Supervisor]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of teams
+
+  /superviser/team/rename/{workspaceId}/{teamId}:
+    put:
+      summary: Rename team (Supervisor or Admin)
+      tags: [Team - Supervisor]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newName]
+              properties:
+                newName:
+                  type: string
+      responses:
+        '200':
+          description: Team renamed successfully
+
+  /superviser/team/remove-member/{workspaceId}/{teamId}:
+    put:
+      summary: Remove member (Supervisor or Admin)
+      tags: [Team - Supervisor]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId]
+              properties:
+                memberId:
+                  type: string
+      responses:
+        '200':
+          description: Member removed

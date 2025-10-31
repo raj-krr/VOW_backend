@@ -5,6 +5,7 @@ import { generateOtp } from "../utils/otp";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { options } from "../constant"
+import { de } from "zod/v4/locales";
 
 
 const sanitizeUser = (userDoc: IUser) => {
@@ -15,6 +16,8 @@ const sanitizeUser = (userDoc: IUser) => {
   delete user.resetOtpExpires;
   delete user.verificationCode;
   delete user.verificationCodeExpires;
+  delete user.__v;
+  delete user.accessToken;
   return user;
 };
 
@@ -27,15 +30,28 @@ const register = async (req: Request<{}, {}, IUser>, res: Response) => {
 
   const normalizedEmail = String(email).toLowerCase().trim();
 
-  const verifiedUser = await UserModel.findOne({ email: normalizedEmail, isVerified: true });
-  if (verifiedUser) {
-    return res.status(400).json({ success: false, msg: "User already exists" });
+  try {
+  const conflict = await UserModel.findOne({
+    isVerified: true,
+    $or: [
+      { email: normalizedEmail },
+      { username: username }
+    ]
+  }).select('email username').lean();
+
+  if (conflict) {
+    if (conflict.email === normalizedEmail) {
+      return res.status(400).json({ success: false, msg: 'Email already in use' });
+    }
+    if (conflict.username === username) {
+      return res.status(400).json({ success: false, msg: 'Username already taken' });
+    }
   }
 
-  const verifiedUsername = await UserModel.findOne({ username, isVerified: true });
-  if (verifiedUsername) {
-    return res.status(400).json({ success: false, msg: "Username already taken" });
-  }
+} catch (err) {
+  console.error(err);
+  return res.status(500).json({ success: false, msg: 'Server error' });
+}
 
   const verificationCode = generateOtp(6);
   const verificationCodeExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 min
@@ -263,7 +279,7 @@ const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res
     await user.save();
 
     const secureFlag = process.env.NODE_ENV === "production";
-    res.clearCookie("resetToken", { httpOnly: true, secure: secureFlag, sameSite: "lax" });
+    res.clearCookie("resetToken", { httpOnly: true, secure: secureFlag, sameSite: "none" });
 
     return res.status(200).json({ success: true, msg: "Password updated successfully" });
   } catch (err: any) {
@@ -278,8 +294,35 @@ const updatePassword = async (req: Request<{}, {}, { newPassword: string }>, res
   }
 };
 
+const logout = async (req: Request, res: Response) => {
+  try {
+    const refreshToken =
+      req.cookies?.refreshToken ||
+      (req.headers["x-refresh-token"] as string);
 
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, msg: "No refresh token provided" });
+    }
+    const user = await UserModel.findOne({ refreshToken });
 
+    if (!user) {
+      res.cookie("accessToken","invalid" ,options);
+      res.cookie("refreshToken","invalid" ,options);
+      return res.status(200).json({ success: true, msg: "Logged out successfully" });
+    }
 
+    user.refreshToken = undefined as any;
+    user.refreshTokenExpires = new Date(Date.now()); // expire immediately
+    await user.save();
 
-export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword };
+    res.cookie("accessToken","invalid", options);
+    res.cookie("refreshToken", "invalid",options );
+
+    return res.status(200).json({ success: true, msg: "Logged out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword, logout };

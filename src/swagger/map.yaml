@@ -1,0 +1,243 @@
+openapi: 3.0.3
+info:
+  title: Map Management API
+  version: 1.0.0
+  description: >
+    This API manages workspace maps — including creation, retrieval,
+    deletion, and real-time presence tracking via Redis.
+
+servers:
+  - url: https://vow-org.me
+    description: AWS development server
+
+tags:
+  - name: Map
+    description: Endpoints for creating, retrieving, and deleting workspace maps.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /maps:
+    post:
+      tags: [Map]
+      summary: Create a new map
+      security:
+        - bearerAuth: []
+      description: Create a new map with layout URL, rooms, and optional metadata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, layoutUrl]
+              properties:
+                name:
+                  type: string
+                  example: "Office Layout - Ground Floor"
+                layoutUrl:
+                  type: string
+                  example: "https://example.com/layouts/floor1.png"
+                rooms:
+                  type: array
+                  items:
+                    type: string
+                    example: "671fbca0123456abcd789ef1"
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  example:
+                    floor: 1
+                    department: "Engineering"
+      responses:
+        "201":
+          description: Map created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "400":
+          description: Invalid request data
+        "500":
+          description: Server error
+
+    get:
+      tags: [Map]
+      summary: Get all maps
+      description: Retrieve all maps, sorted by creation time (newest first).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of maps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  maps:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Map"
+        "500":
+          description: Server error
+
+  /maps/{mapId}:
+    get:
+      tags: [Map]
+      summary: Get a map by ID
+      description: Retrieve detailed information about a specific map.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "671fbca0123456abcd789ef1"
+      responses:
+        "200":
+          description: Map details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  map:
+                    $ref: "#/components/schemas/Map"
+        "400":
+          description: Invalid map ID
+        "404":
+          description: Map not found
+        "500":
+          description: Server error
+
+    delete:
+      tags: [Map]
+      summary: Delete a map
+      description: Deletes a map by its ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "671fbca0123456abcd789ef1"
+      responses:
+        "200":
+          description: Map deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  msg:
+                    type: string
+                    example: Map deleted successfully
+        "400":
+          description: Invalid map ID
+        "404":
+          description: Map not found
+        "500":
+          description: Server error
+
+  /maps/{mapId}/presence:
+    get:
+      tags: [Map]
+      summary: Get map presence
+      description: Returns current user presence in the map (from Redis).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mapId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "671fbca0123456abcd789ef1"
+      responses:
+        "200":
+          description: Presence data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  presence:
+                    type: array
+                    items:
+                      type: object
+                      example:
+                        userId: "64fa1234a4e2b5f6d1a2e7b8"
+                        username: "John Doe"
+                        position:
+                          x: 120
+                          y: 300
+        "400":
+          description: Invalid map ID
+        "500":
+          description: Server error
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Map:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "671fbca0123456abcd789ef1"
+        name:
+          type: string
+          example: "Corporate HQ Layout"
+        layoutUrl:
+          type: string
+          example: "https://example.com/layouts/hq.png"
+        rooms:
+          type: array
+          items:
+            type: string
+            example: "671fbca0123456abcd789ef9"
+        createdBy:
+          type: string
+          example: "671fbca0123456abcd789e01"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-10-31T10:00:00.000Z"
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            theme: "Corporate"
+            floor: 2
+
+    MapResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        map:
+          $ref: "#/components/schemas/Map"

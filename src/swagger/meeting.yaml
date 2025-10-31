@@ -1,0 +1,202 @@
+openapi: 3.0.3
+info:
+  title: Meeting Scheduling API
+  version: "1.0.0"
+  description: |
+    Endpoints for scheduling, retrieving, and deleting meetings.
+    - Only **manager** or **supervisor** can schedule meetings.
+    - On deletion, attendees automatically receive a cancellation email.
+
+servers:
+  - url: https://vow-org.me
+    description:  AWS development server
+
+tags:
+  - name: Meetings
+    description: APIs for scheduling and managing meetings
+
+paths:
+  /schedule/{workspaceId}:
+    post:
+      tags: [Meetings]
+      summary: Schedule a new meeting
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: ID of the workspace
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - startTime
+                - endTime
+              properties:
+                title:
+                  type: string
+                  example: "Sprint Planning"
+                description:
+                  type: string
+                  example: "Discuss sprint goals and assign tasks"
+                startTime:
+                  type: string
+                  format: date-time
+                  example: "2025-11-01T10:00:00Z"
+                endTime:
+                  type: string
+                  format: date-time
+                  example: "2025-11-01T11:00:00Z"
+                teamId:
+                  type: string
+                  example: "671c254d0cf45a2b81cd21d9"
+                isConference:
+                  type: boolean
+                  example: false
+      responses:
+        "201":
+          description: Meeting scheduled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Meeting scheduled successfully
+                  meeting:
+                    $ref: "#/components/schemas/Meeting"
+        "400":
+          description: Missing or invalid data
+        "401":
+          description: Unauthorized
+        "403":
+          description: Not allowed to schedule meeting
+        "404":
+          description: Workspace or team not found
+
+  /{workspaceId}:
+    get:
+      tags: [Meetings]
+      summary: Get all meetings for a workspace
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          description: ID of the workspace
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Meetings fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 2
+                  meetings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Meeting"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Workspace not found
+
+  /{meetingId}:
+    delete:
+      tags: [Meetings]
+      summary: Delete a meeting and notify attendees
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: meetingId
+          in: path
+          required: true
+          description: ID of the meeting to delete
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Meeting deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Meeting deleted successfully (and removed from Calendar)
+        "401":
+          description: Unauthorized
+        "403":
+          description: Not authorized to delete this meeting
+        "404":
+          description: Meeting not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Meeting:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "671c25500cf45a2b81cd21da"
+        title:
+          type: string
+          example: "Sprint Planning"
+        description:
+          type: string
+          example: "Discuss sprint goals"
+        startTime:
+          type: string
+          format: date-time
+          example: "2025-11-01T10:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          example: "2025-11-01T11:00:00Z"
+        attendees:
+          type: array
+          items:
+            type: string
+            example: "alice@example.com"
+        workspace:
+          type: string
+          example: "671c24b30cf45a2b81cd21d7"
+        createdBy:
+          type: string
+          example: "671c22a40cf45a2b81cd21d2"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

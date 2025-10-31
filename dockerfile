@@ -7,7 +7,10 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-RUN mkdir -p dist/swagger && cp src/swagger/swagger.yaml dist/swagger/
+RUN mkdir -p dist/swagger && \
+    cp src/swagger/swagger.yaml dist/swagger/ && \
+    cp src/swagger/workspace.yaml dist/swagger/
+
 FROM node:18-slim AS runner
 WORKDIR /app
 

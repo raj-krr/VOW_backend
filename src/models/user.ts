@@ -14,6 +14,13 @@ export interface IUser extends Document {
   refreshToken?: string;
   createdAt: Date;
   updatedAt: Date;
+   refreshTokenExpires?: Date,
+
+  fullName?: string;
+  organisation?: string;
+  gender?: "male" | "female" | "other";
+  dob?: Date;
+  avatar?: string;
 
   comparePassword(password: string): Promise<boolean>;
   isPasswordCorrect(password: string): Promise<boolean>;
@@ -37,6 +44,12 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
     resetOtp: { type: String },
     resetOtpExpires: { type: Date },
     refreshToken: { type: String },
+refreshTokenExpires: { type: Date },
+    fullName: { type: String },
+  organisation: { type: String },
+  gender: { type: String, enum: ["male", "female", "other"] },
+  dob: { type: Date },
+  avatar: { type: String },
   },
   { timestamps: true }
 );
@@ -55,12 +68,12 @@ userSchema.methods.comparePassword = async function (password: string) {
 userSchema.methods.generateTokens = function () {
   const user = this as IUser;
   const accessToken = jwt.sign(
-    { id: user._id, email: user.email },
+    { _id: user._id, email: user.email },
     process.env.JWT_ACCESS_SECRET as string,
     { expiresIn: "8h" }
   );
   const refreshToken = jwt.sign(
-    { id: user._id, email: user.email },
+    { _id: user._id, email: user.email },
     process.env.JWT_REFRESH_SECRET as string,
     { expiresIn: "7d" }
   );
