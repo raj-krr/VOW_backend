@@ -37,7 +37,10 @@ jobs:
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
             sudo docker stop vow-auth || true
             sudo docker rm vow-auth || true
-            sudo docker run -d -p 8000:8000 --env-file /home/ubuntu/.env --name vow-auth ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
-
             rm -f docker-compose.yml
             curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
+            echo "Stopping old containers..."
+            sudo docker compose down || true
+
+            echo "Starting all services via Docker Compose..."
+            sudo docker compose up -d --remove-orphans
