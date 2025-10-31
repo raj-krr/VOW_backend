@@ -52,7 +52,7 @@ const msgDoc = YAML.load(path.resolve(__dirname, "swagger", "msg.yaml")) ;
 
 // const chatDoc = YAML.load(path.resolve(__dirname, "swagger", "chat.yaml")) ;
 
-const mergedDoc = deepmerge.all([baseDoc, workspaceDoc]) ;
+const mergedDoc = deepmerge.all([baseDoc, workspaceDoc,meetingDoc, mapDoc, msgDoc]) ;
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
 
