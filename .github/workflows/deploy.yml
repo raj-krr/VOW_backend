@@ -3,7 +3,7 @@ name: CI/CD for VOW Backend
 on:
   push:
     branches:
-      - main 
+      - main
 
 jobs:
   build-and-deploy:
@@ -34,13 +34,31 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Install Docker Compose plugin if not already present
+            if ! docker compose version > /dev/null 2>&1; then
+              echo "Installing Docker Compose plugin..."
+              DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
+              mkdir -p $DOCKER_CONFIG/cli-plugins
+              curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+                -o $DOCKER_CONFIG/cli-plugins/docker-compose
+              chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
+            fi
+
+            echo "Pulling new image..."
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+
+            echo "Stopping old container (if exists)..."
             sudo docker stop vow-auth || true
             sudo docker rm vow-auth || true
+
+            echo "Fetching latest docker-compose.yml..."
             rm -f docker-compose.yml
             curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
-            echo "Stopping old containers..."
-            sudo docker compose down || true
 
-            echo "Starting all services via Docker Compose..."
-            sudo docker compose up -d --remove-orphans
+            echo "Stopping old services..."
+            docker compose down || true
+
+            echo "Starting new services..."
+            docker compose up -d --remove-orphans
+
+            echo "Deployment complete!"
