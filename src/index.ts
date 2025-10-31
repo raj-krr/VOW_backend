@@ -25,6 +25,8 @@ import superviserRouter from "./routes/superviserRoute";
 // import serverRoutes from "./routes/serverRoutes";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
+import mapRoutes from "./routes/mapRoutes";
+import roomRoutes from "./routes/roomRoutes";
 
 const app: Application = express();
 app.use(express.json());
@@ -44,6 +46,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const baseDoc = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml")) ;
 const workspaceDoc = YAML.load(path.resolve(__dirname, "swagger", "workspace.yaml")) ;
+// const chatDoc = YAML.load(path.resolve(__dirname, "swagger", "chat.yaml")) ;
 
 const mergedDoc = deepmerge(baseDoc, workspaceDoc) ;
 
@@ -62,6 +65,9 @@ app.use("/api/messages", messageRoutes);
 app.use("/workspaces",workspaceRouter);
 app.use("/manager",managerRouter);
 app.use("/superviser" ,superviserRouter);
+
+app.use("/api/maps", mapRoutes);
+app.use("/api/rooms", roomRoutes);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
