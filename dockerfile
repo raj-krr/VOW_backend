@@ -9,7 +9,11 @@ RUN npm run build
 
 RUN mkdir -p dist/swagger && \
     cp src/swagger/swagger.yaml dist/swagger/ && \
-    cp src/swagger/workspace.yaml dist/swagger/
+    cp src/swagger/workspace.yaml dist/swagger/ && \
+    cp src/swagger/msg.yaml dist/swagger/ && \
+    cp src/swagger/map.yaml dist/swagger/ && \
+    cp src/swagger/meeting.yaml dist/swagger/
+
 
 FROM node:18-slim AS runner
 WORKDIR /app
