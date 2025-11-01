@@ -27,6 +27,7 @@ import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import mapRoutes from "./routes/mapRoutes";
 import roomRoutes from "./routes/roomRoutes";
+import meetingRoutes from "./routes/meetingRoutes"
 
 const app: Application = express();
 app.use(express.json());
@@ -86,6 +87,7 @@ app.use("/superviser" ,superviserRouter);
 
 app.use("/maps", mapRoutes);
 app.use("/", roomRoutes);
+app.use("/meeting",meetingRoutes);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);

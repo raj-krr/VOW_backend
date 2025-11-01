@@ -9,6 +9,6 @@ router.post("/schedule/:workspaceId", verifyJWT, verifyWorkspaceToken, scheduleM
 
 router.get("/:workspaceId", verifyJWT, verifyWorkspaceToken, getWorkspaceMeetings);
 
-router.delete("/:meetingId", verifyJWT, verifyWorkspaceToken, deleteMeeting);
+router.delete("/:workspaceId/:meetingId", verifyJWT, verifyWorkspaceToken, deleteMeeting);
 
 export default router;

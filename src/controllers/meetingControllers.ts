@@ -9,6 +9,7 @@ import {
   sendMeetingCancellationEmail,
 } from "../middlewares/email";
 
+
 export const scheduleMeeting = async (req: Request, res: Response): Promise<void> => {
   try {
     const workspaceUser = req.workspaceUser;
@@ -19,6 +20,22 @@ export const scheduleMeeting = async (req: Request, res: Response): Promise<void
 
     if (!title || !startTime || !endTime)
       throw new ApiError(400, "Missing required meeting details");
+
+     const start = new Date(startTime);
+    const end = new Date(endTime);
+    const now = new Date();
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new ApiError(400, "Invalid date format for startTime or endTime");
+    }
+
+    if (start <= now) {
+      throw new ApiError(400, "Meeting start time must be in the future");
+    }
+
+    if (end <= start) {
+      throw new ApiError(400, "End time must be after start time");
+    }
 
     const { userId } = workspaceUser;
 
@@ -60,8 +77,8 @@ export const scheduleMeeting = async (req: Request, res: Response): Promise<void
     const meeting = await MeetingModel.create({
       title,
       description,
-      startTime,
-      endTime,
+      startTime : start,
+      endTime :end,
       attendees: meetingAttendees,
       workspace: workspaceId,
       createdBy: userId,
@@ -71,8 +88,8 @@ await sendMeetingScheduledEmail(
   meetingAttendees,
   title,
   description,
-  startTime,
-  endTime,
+  start,
+  end,
   workspaceUser.fullName || "Manager"
 );
 
@@ -93,7 +110,7 @@ scheduleMeetingReminderEmail(meetingAttendees, title, startTime);
 
 export const getWorkspaceMeetings = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceUser = req.workspaceUser;
+    const workspaceUser = req.params;
     if (!workspaceUser) throw new ApiError(401, "Unauthorized");
 
     const { workspaceId } = req.params;
@@ -149,12 +166,13 @@ export const deleteMeeting = async (req: Request, res: Response): Promise<void> 
       meeting.attendees,
       meeting.title,
       meeting.startTime,
+      workspace?.workspaceName,
     );
 
 
     res.status(200).json({
       success: true,
-      message: "Meeting deleted successfully (and removed from Calendar)",
+      message: "Meeting deleted successfully.",
     });
   } catch (err: any) {
     console.error("Error deleting meeting:", err);

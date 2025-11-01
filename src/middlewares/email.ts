@@ -75,8 +75,8 @@ export const sendMeetingScheduledEmail = async (
   attendees: string[],
   title: string,
   description: string,
-  startTime: string,
-  endTime: string,
+  startTime: Date,
+  endTime: Date,
   organizerName: string
 ) => {
   try {
@@ -107,9 +107,9 @@ export const sendMeetingScheduledEmail = async (
       html,
     });
 
-    console.log(`✅ Meeting scheduled email sent to: ${attendees.join(", ")}`);
+    console.log(`Meeting scheduled email sent to: ${attendees.join(", ")}`);
   } catch (error) {
-    console.error("❌ Error sending meeting scheduled email:", error);
+    console.error("Error sending meeting scheduled email:", error);
   }
 };
 
