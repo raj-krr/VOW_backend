@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
-
+import fs from "fs";
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
@@ -44,18 +44,32 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-const baseDoc = YAML.load(path.resolve(__dirname, "swagger", "swagger.yaml")) ;
-const workspaceDoc = YAML.load(path.resolve(__dirname, "swagger", "workspace.yaml")) ;
-const meetingDoc = YAML.load(path.resolve(__dirname, "swagger", "meeting.yaml")) ;
-const mapDoc = YAML.load(path.resolve(__dirname, "swagger", "map.yaml")) ;
-const msgDoc = YAML.load(path.resolve(__dirname, "swagger", "msg.yaml")) ;
+// Helper to safely load a YAML file
+function safeLoadYAML(fileName: string) {
+  const filePath = path.resolve(__dirname, "swagger", fileName);
+  if (fs.existsSync(filePath)) {
+    return YAML.load(filePath);
+  } else {
+    console.warn(`⚠️  Swagger file missing: ${fileName}`);
+    return {};
+  }
+}
 
-// const chatDoc = YAML.load(path.resolve(__dirname, "swagger", "chat.yaml")) ;
+const baseDoc = safeLoadYAML("swagger.yaml");
+const workspaceDoc = safeLoadYAML("workspace.yaml");
+const meetingDoc = safeLoadYAML("meeting.yaml");
+const mapDoc = safeLoadYAML("map.yaml");
+const msgDoc = safeLoadYAML("msg.yaml");
 
-const mergedDoc = deepmerge.all([baseDoc, workspaceDoc,meetingDoc, mapDoc, msgDoc]) ;
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
+const mergedDoc = deepmerge.all([baseDoc, workspaceDoc, meetingDoc, mapDoc, msgDoc]);
 
+if (Object.keys(mergedDoc).length > 0) {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
+  console.log(` Swagger Docs loaded at /api-docs`);
+} else {
+  console.warn(" No Swagger docs found, skipping /api-docs route");
+}
 
 // API routes
 app.use("/auth", AuthRoutes);
