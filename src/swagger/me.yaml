@@ -1,0 +1,237 @@
+openapi: 3.0.3
+info:
+  title: Me Routes API
+  version: "1.0.0"
+  description: Endpoints for managing the authenticated user's profile and avatar.
+servers:
+  - url: https://vow-org.me
+    description: Production server
+  - url: http://localhost:5000
+    description: Local development server
+
+tags:
+  - name: me
+    description: Routes for current authenticated user
+
+paths:
+  /me/updateprofile:
+    post:
+      tags: [me]
+      summary: Update user profile details and auto-generate avatar
+      description: >
+        Updates user profile info (name, organization, gender, DOB).  
+        Based on gender, an automatic avatar is assigned from AWS S3.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile and avatar updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateProfileSuccess"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /me/uploadprofile:
+    post:
+      tags: [me]
+      summary: Upload a custom profile photo
+      description: >
+        Allows the authenticated user to upload a custom profile picture to AWS S3.  
+        The uploaded image replaces the automatically generated avatar.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [avatar]
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: The image file to upload.
+      responses:
+        "200":
+          description: Profile photo uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadProfileSuccess"
+        "400":
+          description: Missing or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Upload failed or server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /me/info:
+    get:
+      tags: [me]
+      summary: Get current user profile
+      description: Returns the authenticated user's profile data (without password).
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Successfully retrieved user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: JWT token stored in cookies for authentication.
+
+  schemas:
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          example: "John Doe"
+        organisation:
+          type: string
+          example: "Acme Corp"
+        gender:
+          type: string
+          enum: [male, female, other]
+          example: male
+        dob:
+          type: string
+          format: date
+          example: "1995-05-10"
+
+    UpdateProfileSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "Profile and avatar updated successfully"
+        data:
+          $ref: "#/components/schemas/UserSanitized"
+
+    UploadProfileSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        msg:
+          type: string
+          example: "Profile photo uploaded successfully"
+        data:
+          $ref: "#/components/schemas/UserSanitized"
+
+    UserSanitized:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "64b91e9b1a2d34b91c12ef45"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        username:
+          type: string
+          example: "johndoe"
+        fullName:
+          type: string
+          example: "John Doe"
+        organisation:
+          type: string
+          example: "Acme Corp"
+        gender:
+          type: string
+          enum: [male, female, other]
+          example: male
+        dob:
+          type: string
+          format: date
+          example: "1995-05-10"
+        avatar:
+          type: string
+          example: "https://vow-bucket.s3.ap-south-1.amazonaws.com/male/Boy13.png"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/UserSanitized"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        msg:
+          type: string
+          example: "Unauthorized or invalid request"

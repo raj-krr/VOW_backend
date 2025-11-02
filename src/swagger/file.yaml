@@ -1,0 +1,143 @@
+openapi: 3.0.3
+info:
+  title: Files API
+  version: "1.0.0"
+  description: File upload, download, and delete endpoints.
+servers:
+  - url: https://vow-org.me
+  - url: http://localhost:5000
+
+tags:
+  - name: Files
+    description: File upload/download/delete routes
+
+paths:
+  /files:
+    get:
+      tags: [Files]
+      summary: Get all uploaded files
+      responses:
+        '200':
+          description: List of uploaded files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/File'
+
+  /files/upload:
+    post:
+      tags: [Files]
+      summary: Upload a new file to Cloudinary
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadSuccess'
+        '400':
+          description: Missing file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Upload failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /files/download/{id}:
+    get:
+      tags: [Files]
+      summary: Download file by ID (redirect to Cloudinary)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB file ID
+      responses:
+        '302':
+          description: Redirect to file URL
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /files/delete/{id}:
+    delete:
+      tags: [Files]
+      summary: Delete a file from Cloudinary and MongoDB
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB file ID
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Deletion failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    File:
+      type: object
+      properties:
+        _id: { type: string }
+        filename: { type: string }
+        url: { type: string }
+        cloudinaryId: { type: string }
+        size: { type: integer }
+        mimeType: { type: string }
+        createdAt: { type: string }
+    FileUploadSuccess:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+        file: { $ref: '#/components/schemas/File' }
+    SuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }

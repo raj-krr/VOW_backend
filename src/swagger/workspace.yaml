@@ -7,6 +7,8 @@ info:
 servers:
   - url:  https://vow-org.me
     description: AWS development server
+  - url:  http://localhost:5000
+    description: AWS development server
 
 components:
   securitySchemes:

@@ -132,26 +132,33 @@ export const rejoinWorkspace = async (req: Request , res: Response): Promise<voi
 
 export const workspaceMembers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const {workspaceId }= req.params;
+    const { workspaceId } = req.params;
+
     if (!workspaceId) {
       res.status(400).json({ success: false, message: "workspaceId not provided" });
       return;
     }
 
-    const workspace = await Workspace.findById(workspaceId);
+   
+    const workspace = await Workspace.findById(workspaceId)
+      .populate("members", "fullName ");
+
     if (!workspace) {
       res.status(404).json({ success: false, message: "Workspace not found" });
       return;
     }
 
-  const members = workspace.members.map((m: Types.ObjectId | string) => m.toString());
+    const members = workspace.members.map((m: any) => ({
+      id: m._id,
+      fullName: m.fullName,
+    }));
 
     res.status(200).json({ success: true, members });
   } catch (error: any) {
     console.error("Workspace members error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
-}
+};
 
 export const deleteWorkspace = async (req: Request, res: Response): Promise<void> => {
   try {

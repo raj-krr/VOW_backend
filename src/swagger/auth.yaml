@@ -1,0 +1,337 @@
+openapi: 3.0.3
+info:
+  title: Auth API
+  version: "1.0.0"
+  description: Authentication endpoints for registration, login, verification, and password reset.
+servers:
+  - url: https://vow-org.me
+    description: AWS development server
+  - url: http://localhost:5000
+    description: AWS development server
+
+tags:
+  - name: Auth
+    description: Authentication and user account routes
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user (creates or overwrites unverified account)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered successfully — verification code sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSuccess'
+        '400':
+          description: Missing fields or user exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email or username already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error / email sending failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verifyemail:
+    post:
+      tags: [Auth]
+      summary: Verify email using OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/resend:
+    post:
+      tags: [Auth]
+      summary: Resend verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendRequest'
+      responses:
+        '200':
+          description: Verification code resent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Already verified / missing email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to send email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login using email or username and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful — returns tokens and user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSuccess'
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/forgetpassword:
+    post:
+      tags: [Auth]
+      summary: Send OTP to reset password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordSuccess'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verifyresetotp:
+    post:
+      tags: [Auth]
+      summary: Verify reset OTP and get short-lived resetToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyResetOtpRequest'
+      responses:
+        '200':
+          description: OTP verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResetOtpSuccess'
+        '400':
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/updatepassword:
+    post:
+      tags: [Auth]
+      summary: Update password using resetToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePasswordRequest'
+      responses:
+        '200':
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid / expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+    RegisterSuccess:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+        user: { $ref: '#/components/schemas/UserSanitized' }
+    VerifyEmailRequest:
+      type: object
+      properties:
+        email: { type: string }
+        code: { type: string }
+    ResendRequest:
+      type: object
+      properties:
+        email: { type: string }
+    LoginRequest:
+      type: object
+      properties:
+        identifier: { type: string }
+        password: { type: string }
+    LoginSuccess:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+        user: { $ref: '#/components/schemas/UserSanitized' }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email: { type: string }
+    ForgotPasswordSuccess:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+    VerifyResetOtpRequest:
+      type: object
+      properties:
+        email: { type: string }
+        otp: { type: string }
+    VerifyResetOtpSuccess:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+        resetToken: { type: string }
+        expiresIn: { type: integer }
+    UpdatePasswordRequest:
+      type: object
+      properties:
+        newPassword: { type: string }
+    UserSanitized:
+      type: object
+      properties:
+        _id: { type: string }
+        email: { type: string }
+        username: { type: string }
+    SuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        msg: { type: string }

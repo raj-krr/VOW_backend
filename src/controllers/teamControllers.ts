@@ -162,7 +162,7 @@ export const getAllTeams = async (req: Request, res: Response): Promise<void> =>
 
     const teams = await TeamModel.find({ workspaceId })
       .populate("members", "fullName email")
-      .populate("teamLead", "fullName email")
+      .populate("supervisor", "fullName email")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
