@@ -28,6 +28,8 @@ import messageRoutes from "./routes/messageRoutes";
 import mapRoutes from "./routes/mapRoutes";
 import roomRoutes from "./routes/roomRoutes";
 import meetingRoutes from "./routes/meetingRoutes"
+import { initVideoCalling } from "./videocalling/src/app";
+
 
 const app: Application = express();
 app.use(express.json());
@@ -111,9 +113,10 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 // Start server after DB connects
 const PORT = process.env.PORT || 8000;
 mongoDb()
-  .then(() => {
-    const server = http.createServer(app);
+  .then(async() => {
+    const server = await http.createServer(app);
     const io = initSocket(server);
+    initVideoCalling(app, server);
 
     server.listen(PORT, () => {
       console.log(` Database connected successfully`);
@@ -130,7 +133,7 @@ mongoDb()
 cron.schedule("0 2 * * *", async () => {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   await UserModel.deleteMany({ isVerified: false, createdAt: { $lt: cutoff } });
-  console.log("🧹 Purged stale unverified accounts");
+  console.log(" Purged stale unverified accounts");
 });
 
 // Error safety
