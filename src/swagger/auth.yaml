@@ -4,7 +4,7 @@ info:
   version: "1.0.0"
   description: Authentication endpoints for registration, login, verification, and password reset.
 servers:
-  - url: https://vow-org.me
+  - url: process.env.BASE_URL
     description: AWS development server
   - url: http://localhost:5000
     description: AWS development server

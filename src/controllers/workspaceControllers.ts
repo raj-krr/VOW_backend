@@ -37,8 +37,6 @@ await workspace.save();
       success: true,
       message: "Joined workspace successfully",
       workspace,
-      cookieName,
-      workspaceToken,
     });
 
 if (inviteEmails && inviteEmails.length > 0) {
@@ -84,8 +82,6 @@ res.status(201).json({
       success: true,
       message: "Joined workspace successfully",
       workspace,
-      cookieName,
-      workspaceToken,
     });
   };
   } catch (error: any) {
@@ -93,6 +89,7 @@ res.status(201).json({
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
 export const getWorkspaceDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?._id as Types.ObjectId ;

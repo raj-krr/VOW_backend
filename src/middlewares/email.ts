@@ -101,7 +101,7 @@ export const sendMeetingScheduledEmail = async (
     `;
 
     await transporter.sendMail({
-      from: `"VOW Scheduler" <${process.env.EMAIL_USER}>`,
+      from: `"VOW Scheduler" <${process.env.EMAIL}>`,
       to: attendees.join(", "),
       subject: `📅 Meeting Scheduled: ${title}`,
       html,
@@ -138,7 +138,7 @@ export const scheduleMeetingReminderEmail = (
         `;
 
         await transporter.sendMail({
-          from: `"VOW Scheduler" <${process.env.EMAIL_USER}>`,
+          from: `"VOW Scheduler" <${process.env.EMAIL}>`,
           to: attendees.join(", "),
           subject: `⏰ Reminder: Meeting "${title}" starts in 15 minutes`,
           html,
@@ -166,7 +166,7 @@ export const sendMeetingCancellationEmail = async (
   const formattedDate = new Date(startTime).toLocaleString();
 
   const emailTemplate = (email: string) => ({
-    from: `"${workspaceName || "Workspace"}" <${process.env.EMAIL_USER}>`,
+    from: `"${workspaceName || "Workspace"}" <${process.env.EMAIL}>`,
     to: email,
     subject: `Meeting Cancelled: ${meetingTitle}`,
     html: `
@@ -191,3 +191,41 @@ export const sendMeetingCancellationEmail = async (
   }
 };
 
+export const sendMeetingRescheduleEmail = async (
+  attendees: string[],
+  title: string,
+  oldStartTime: Date,
+  newStartTime: Date,
+  newEndTime: Date,
+  updatedBy: string,
+  workspace:string
+) => {
+  try {
+    if (!attendees.length) return;
+
+    const formattedOldStart = new Date(oldStartTime).toLocaleString();
+    const formattedNewStart = new Date(newStartTime).toLocaleString();
+    const formattedNewEnd = new Date(newEndTime).toLocaleString();
+
+    const mailOptions = {
+      from: process.env.EMAIL,
+      to: attendees,
+      subject: `Meeting Rescheduled: ${title}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;line-height:1.6">
+          <h2 style="color:#2b6cb0;">📅 Meeting Rescheduled</h2>
+          <p>The meeting <strong>"${title}"</strong> has been rescheduled by <strong>${updatedBy}</strong>.</p>
+          <p><strong>Previous Time:</strong> ${formattedOldStart}</p>
+          <p><strong>New Time:</strong> ${formattedNewStart} - ${formattedNewEnd}</p>
+          <p>Please update your calendars accordingly.</p>
+          <p style="margin-top:20px;color:#555;">Thank you,<br>${workspace}</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log("Reschedule email sent successfully");
+  } catch (err) {
+    console.error("Error sending reschedule email:", err);
+  }
+};

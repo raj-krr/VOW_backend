@@ -23,3 +23,20 @@ export const getChannelMessages = async (req: Request, res: Response) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+export const deleteMessage = async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: "messageId is required" });
+    }
+    const deletedMessage = await Message.findByIdAndDelete(messageId);
+    if (!deletedMessage) {
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
+    res.status(200).json({ success: true, message: "Message deleted successfully", data: deletedMessage });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

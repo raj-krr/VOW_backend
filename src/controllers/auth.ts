@@ -18,6 +18,13 @@ const sanitizeUser = (userDoc: IUser) => {
   delete user.verificationCodeExpires;
   delete user.__v;
   delete user.accessToken;
+  delete user.username;
+  delete user.gender;
+  delete user.organisation;
+  delete user.avatar;
+  delete user.fullName;
+  delete user.dob;
+  delete user.refreshTokenExpires;
   return user;
 };
 
