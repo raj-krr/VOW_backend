@@ -16,6 +16,23 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
       res.status(400).json({ message: "No file uploaded" });
       return;
     }
+ const allowedMimeTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ];
+
+    if (!allowedMimeTypes.includes(req.file.mimetype)) {
+      fs.unlinkSync(req.file.path); // delete temp file
+      res.status(400).json({ message: "Only images, PDF, Word, and PPT files are allowed" });
+      return;
+    }
 
     const bucketName = process.env.AWS_BUCKET_NAME;
     const fileContent = fs.readFileSync(req.file.path);

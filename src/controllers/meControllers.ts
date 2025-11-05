@@ -66,6 +66,18 @@ const sanitizeUser = (userDoc: IUser) => {
 
     if (!req.file) throw new ApiError(400, "No file uploaded");
 
+    const allowedMimeTypes =[
+      "image/jpeg",
+      "image/png",
+      "image/svg"
+    ];
+
+if (!allowedMimeTypes.includes(req.file.mimetype)){
+  fs.unlinkSync(req.file.path);
+  res.status(400).json({message:"only image is used as profile photo"});
+  return;
+};
+
     const filePath = req.file.path;
     const fileExt = path.extname(req.file.originalname);
     const fileKey = `user-avatars/${userId}/profile-${fileExt}`;
