@@ -22,6 +22,7 @@ import workspaceRouter from "./routes/workspaceRoute";
 import managerRouter from "./routes/managerRoutes";
 import superviserRouter from "./routes/superviserRoute";
 
+import { dmSocketHandler } from "./sockets/dmSocket";
 // import serverRoutes from "./routes/serverRoutes";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
@@ -114,6 +115,7 @@ mongoDb()
   .then(() => {
     const server = http.createServer(app);
     const io = initSocket(server);
+    dmSocketHandler(io);
 
     server.listen(PORT, () => {
       console.log(` Database connected successfully`);
@@ -130,7 +132,7 @@ mongoDb()
 cron.schedule("0 2 * * *", async () => {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   await UserModel.deleteMany({ isVerified: false, createdAt: { $lt: cutoff } });
-  console.log("🧹 Purged stale unverified accounts");
+  console.log("Purged stale unverified accounts");
 });
 
 // Error safety
