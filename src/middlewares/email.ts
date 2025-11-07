@@ -117,7 +117,7 @@ export const sendMeetingScheduledEmail = async (
 export const scheduleMeetingReminderEmail = (
   attendees: string[],
   title: string,
-  startTime: string
+  startTime: Date
 ) => {
   const alertTime = new Date(new Date(startTime).getTime() - 15 * 60 * 1000);
 

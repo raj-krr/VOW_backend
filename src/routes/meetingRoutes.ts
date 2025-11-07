@@ -1,17 +1,16 @@
 import express from "express";
 import { scheduleMeeting, getWorkspaceMeetings, deleteMeeting ,updateMeeting} from "../controllers/meetingControllers";
 import { verifyJWT } from "../middlewares/authmiddleware";
-import { verifyWorkspaceToken } from "../middlewares/workspace.middleware";
 
 const router = express.Router();
 
-router.post("/schedule/:workspaceId", verifyJWT, verifyWorkspaceToken, scheduleMeeting);
+router.post("/schedule/:workspaceId", verifyJWT, scheduleMeeting);
 
-router.get("/:workspaceId", verifyJWT, verifyWorkspaceToken, getWorkspaceMeetings);
+router.get("/all", verifyJWT, getWorkspaceMeetings);
 
-router.delete("/:workspaceId/:meetingId", verifyJWT, verifyWorkspaceToken, deleteMeeting);
+router.delete("/:meetingId", verifyJWT, deleteMeeting);
 
-router.put("/update/:workspaceId/:meetingId", verifyJWT,verifyWorkspaceToken,updateMeeting);
+router.put("/update/:meetingId", verifyJWT,updateMeeting);
 
 
 export default router;

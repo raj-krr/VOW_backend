@@ -1,5 +1,4 @@
 import mongoose, { Document, Schema } from "mongoose";
-import UserModel from "./user";
 
 export interface IFile extends Document {
   filename: string;
@@ -7,6 +6,8 @@ export interface IFile extends Document {
   s3FileId: string;
   size: number;
   mimeType: string;
+  workspace: mongoose.Schema.Types.ObjectId;
+  uploadedBy: mongoose.Schema.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,18 @@ const fileSchema = new Schema<IFile>(
     s3FileId: { type: String, required: true },
     size: { type: Number, required: true },
     mimeType: { type: String, required: true },
+
+    workspace: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Workspace",
+      required: true,
+    },
+
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
   },
   { timestamps: true }
 );

@@ -13,16 +13,17 @@ import {
 
 export const scheduleMeeting = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceUser = req.workspaceUser;
-    if (!workspaceUser) throw new ApiError(401, "Unauthorized");
+    const user = req.user;
+    if (!user) throw new ApiError(401, "Unauthorized user");
 
     const { workspaceId } = req.params;
     const { title, description, startTime, endTime, teamId, isConference } = req.body;
 
-    if (!title || !startTime || !endTime)
+    if (!title || !startTime || !endTime) {
       throw new ApiError(400, "Missing required meeting details");
+    }
 
-     const start = new Date(startTime);
+    const start = new Date(startTime);
     const end = new Date(endTime);
     const now = new Date();
 
@@ -38,17 +39,21 @@ export const scheduleMeeting = async (req: Request, res: Response): Promise<void
       throw new ApiError(400, "End time must be after start time");
     }
 
-    const { userId } = workspaceUser;
+    const userId = String(user._id);
 
     const workspace = await WorkspaceModel.findById(workspaceId);
     if (!workspace) throw new ApiError(404, "Workspace not found");
 
-    const isManager = workspace.manager.toString() === userId.toString();
+    const isManager =
+      workspace.manager &&
+      workspace.manager.toString() === userId;
+
     const supervisorTeam = await TeamModel.findOne({ workspaceId, superviser: userId });
     const isSupervisor = !!supervisorTeam;
 
-    if (!isManager && !isSupervisor)
+    if (!isManager && !isSupervisor) {
       throw new ApiError(403, "Only manager or supervisor can schedule meetings");
+    }
 
     let meetingAttendees: string[] = [];
 
@@ -71,6 +76,7 @@ export const scheduleMeeting = async (req: Request, res: Response): Promise<void
         workspaceId,
         superviser: userId,
       }).populate("members", "email");
+
       if (!team) throw new ApiError(404, "Team not found");
       meetingAttendees = team.members.map((m: any) => m.email);
     }
@@ -78,24 +84,24 @@ export const scheduleMeeting = async (req: Request, res: Response): Promise<void
     const meeting = await MeetingModel.create({
       title,
       description,
-      startTime : start,
-      endTime :end,
+      startTime: start,
+      endTime: end,
       attendees: meetingAttendees,
       workspace: workspaceId,
       createdBy: userId,
     });
 
-await sendMeetingScheduledEmail(
-  meetingAttendees,
-  title,
-  description,
-  start,
-  end,
-  workspaceUser.fullName || "Manager"
-);
+    await sendMeetingScheduledEmail(
+      meetingAttendees,
+      title,
+      description,
+      start,
+      end,
+      user.fullName || "Manager"
+    );
 
-scheduleMeetingReminderEmail(meetingAttendees, title, startTime);
-    
+    scheduleMeetingReminderEmail(meetingAttendees, title, startTime);
+
     res.status(201).json({
       success: true,
       message: "Meeting scheduled successfully",
@@ -111,19 +117,49 @@ scheduleMeetingReminderEmail(meetingAttendees, title, startTime);
 
 export const getWorkspaceMeetings = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceUser = req.params;
-    if (!workspaceUser) throw new ApiError(401, "Unauthorized");
 
-    const { workspaceId } = req.params;
-    const workspace = await WorkspaceModel.findById(workspaceId);
-    if (!workspace) throw new ApiError(404, "Workspace not found");
+    const user = req.user;
+    if (!user) throw new ApiError(401, "Unauthorized");
 
-    const meetings = await MeetingModel.find({ workspace: workspaceId })
+    const userId = String(user._id);
+
+    const workspaces = await WorkspaceModel.find({
+      $or: [
+        { manager: userId },
+        { members: userId },
+      ],
+    }).select("_id workspaceName");
+
+    const supervisedTeams = await TeamModel.find({ superviser: userId }).select("workspaceId");
+    const supervisedWorkspaceIds = supervisedTeams.map((t) => String(t.workspaceId));
+
+    const allWorkspaceIds = [
+      ...new Set([
+        ...workspaces.map((w) => String(w._id)),
+        ...supervisedWorkspaceIds,
+      ]),
+    ];
+
+    if (allWorkspaceIds.length === 0) {
+      res.status(200).json({
+        success: true,
+        message: "No meetings found. User is not part of any workspace.",
+        count: 0,
+        meetings: [],
+      });
+      return;
+    }
+
+    const meetings = await MeetingModel.find({
+      workspace: { $in: allWorkspaceIds },
+    })
       .sort({ startTime: -1 })
-      .populate("createdBy", "fullName email");
+      .populate("createdBy", "fullName email")
+      .populate("workspace", "workspaceName");
 
     res.status(200).json({
       success: true,
+      message: "Fetched all meetings from joined workspaces",
       count: meetings.length,
       meetings,
     });
@@ -131,45 +167,51 @@ export const getWorkspaceMeetings = async (req: Request, res: Response): Promise
     console.error("Error fetching meetings:", err);
     res
       .status(err.statusCode || 500)
-      .json({ success: false, message: err.message || "Server error" });
+      .json({
+        success: false,
+        message: err.message || "Server error while fetching meetings",
+      });
   }
 };
 
 export const deleteMeeting = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceUser = req.workspaceUser;
-    if (!workspaceUser) throw new ApiError(401, "Unauthorized");
+
+    const user = req.user;
+    if (!user) throw new ApiError(401, "Unauthorized");
 
     const { meetingId } = req.params;
-    const { userId } = workspaceUser;
+    const userId = String(user._id);
 
     const meeting = await MeetingModel.findById(meetingId);
     if (!meeting) throw new ApiError(404, "Meeting not found");
 
     const workspace = await WorkspaceModel.findById(meeting.workspace);
-    const isManager = workspace?.manager.toString() === userId.toString();
+    if (!workspace) throw new ApiError(404, "Workspace not found");
+
+    const isManager =
+      workspace.manager && workspace.manager.toString() === userId;
+
     const supervisorTeam = await TeamModel.findOne({
-      workspaceId: workspace?._id,
+      workspaceId: workspace._id,
       superviser: userId,
     });
+    const isSupervisor = !!supervisorTeam;
 
-    if (
-      meeting.createdBy.toString() !== userId.toString() &&
-      !isManager &&
-      !supervisorTeam
-    ) {
+    const isCreator = meeting.createdBy.toString() === userId;
+
+    if (!isCreator && !isManager && !isSupervisor) {
       throw new ApiError(403, "Not authorized to delete this meeting");
     }
 
-
     await meeting.deleteOne();
+
     await sendMeetingCancellationEmail(
       meeting.attendees,
       meeting.title,
       meeting.startTime,
-      workspace?.workspaceName,
+      workspace.workspaceName
     );
-
 
     res.status(200).json({
       success: true,
@@ -186,12 +228,12 @@ export const deleteMeeting = async (req: Request, res: Response): Promise<void> 
 
 export const updateMeeting = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workspaceUser = req.workspaceUser;
-    if (!workspaceUser) throw new ApiError(401, "Unauthorized");
+    const user = req.user;
+    if (!user) throw new ApiError(401, "Unauthorized");
 
     const { meetingId } = req.params;
     const { startTime, endTime, title, description } = req.body;
-    const { userId } = workspaceUser;
+    const userId = String(user._id);
 
     const meeting = await MeetingModel.findById(meetingId);
     if (!meeting) throw new ApiError(404, "Meeting not found");
@@ -199,18 +241,17 @@ export const updateMeeting = async (req: Request, res: Response): Promise<void> 
     const workspace = await WorkspaceModel.findById(meeting.workspace);
     if (!workspace) throw new ApiError(404, "Workspace not found");
 
-    const isManager = workspace.manager.toString() === userId.toString();
+    const isManager =
+      workspace.manager && workspace.manager.toString() === userId;
+
     const supervisorTeam = await TeamModel.findOne({
       workspaceId: workspace._id,
       superviser: userId,
     });
     const isSupervisor = !!supervisorTeam;
 
-    if (
-      meeting.createdBy.toString() !== userId.toString() &&
-      !isManager &&
-      !isSupervisor
-    ) {
+    const isCreator = meeting.createdBy.toString() === userId;
+    if (!isCreator && !isManager && !isSupervisor) {
       throw new ApiError(403, "Not authorized to update this meeting");
     }
 
@@ -248,11 +289,11 @@ export const updateMeeting = async (req: Request, res: Response): Promise<void> 
         oldStart,
         meeting.startTime,
         meeting.endTime,
-        workspaceUser.fullName || "Manager",
-        workspace.workspaceName,
+        user.fullName || "Manager",
+        workspace.workspaceName
       );
 
-      scheduleMeetingReminderEmail(meeting.attendees, meeting.title, startTime);
+      scheduleMeetingReminderEmail(meeting.attendees, meeting.title, meeting.startTime);
     } else {
       await sendMeetingScheduledEmail(
         meeting.attendees,
@@ -260,10 +301,10 @@ export const updateMeeting = async (req: Request, res: Response): Promise<void> 
         description,
         meeting.startTime,
         meeting.endTime,
-        workspaceUser.fullName || "Manager",
+        user.fullName || "Manager"
       );
     }
-
+ 
     res.status(200).json({
       success: true,
       message: "Meeting updated successfully",

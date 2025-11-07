@@ -3,15 +3,19 @@ import { upload } from "../middlewares/multer";
 import {
   getAllFiles,
   uploadFile,
-  downloadFile,
   deleteFile,
+  getAllUserWorkspaceFiles
 } from "../controllers/fileControllers";
+import { verifyJWT } from "../middlewares/authmiddleware";
+import { verifyWorkspaceToken } from "../middlewares/workspace.middleware";
+
 
 const fileRouter = Router();
 
-fileRouter.get("/", getAllFiles);
-fileRouter.post("/upload",  upload.single("file"), uploadFile);
-fileRouter.get("/download/:id",  downloadFile);
-fileRouter.delete("/delete/:id", deleteFile);
+fileRouter.post("/:workspaceId/upload", verifyJWT, upload.single("file"), uploadFile);
+fileRouter.get("/:workspaceId", verifyJWT, getAllFiles);
+fileRouter.delete("/delete/:id", verifyJWT, deleteFile);
+fileRouter.get("/all/joined", verifyJWT, getAllUserWorkspaceFiles);
+
 
 export default fileRouter;
