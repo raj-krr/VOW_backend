@@ -6,6 +6,8 @@ info:
 servers:
   - url: http://localhost:5000
     description: Local development server
+  - url: https://vow-org.me
+  description: AWS development server
 
 tags:
   - name: Meeting
