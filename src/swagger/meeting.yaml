@@ -4,10 +4,10 @@ info:
   version: 1.0.0
   description: API documentation for managing meetings in a workspace.
 servers:
-  - url: http://localhost:5000
-    description: Local development server
   - url: https://vow-org.me
-  description: AWS development server
+    description: AWS development server
+  - url: http://localhost:5000
+    description: AWS development server
 
 tags:
   - name: Meeting
