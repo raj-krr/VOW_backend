@@ -3,11 +3,6 @@ info:
   title: Me Routes API
   version: "1.0.0"
   description: Endpoints for managing the authenticated user's profile and avatar.
-servers:
-  - url: https://vow-org.me
-    description: Production server
-  - url: http://localhost:5000
-    description: Local development server
 
 tags:
   - name: me

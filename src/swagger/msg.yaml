@@ -6,11 +6,6 @@ info:
     REST API for managing rooms, channels, and messages in the VOW platform.  
     All endpoints require JWT authentication unless noted otherwise.
 
-servers:
-  - url:  https://vow-org.me
-    description: AWS development server
-  - url:  http://localhost:5000
-    description: AWS development server
 
 tags:
   - name: Channels

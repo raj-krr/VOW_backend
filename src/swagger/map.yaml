@@ -6,11 +6,6 @@ info:
     This API manages workspace maps — including creation, retrieval,
     deletion, and real-time presence tracking via Redis.
 
-servers:
-  - url: https://vow-org.me
-    description: AWS development server
-  - url: http://localhost:5000
-    description: AWS development server
 
 tags:
   - name: Map

@@ -11,13 +11,6 @@ info:
     - 🟢 **Admin/Superadmin** – can delete any file globally.
     - 🔴 **Member only** – cannot delete files.
 
-servers:
-  - url: https://vow-org.me
-    description: AWS development server
-  - url: http://localhost:5000
-    description: AWS development server
-
-
 tags:
   - name: Files
     description: Upload, retrieve, and delete workspace files
