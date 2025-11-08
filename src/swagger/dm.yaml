@@ -1,0 +1,213 @@
+openapi: 3.0.0
+info:
+  title: Direct Message API
+  version: 1.0.0
+  description: |
+    API endpoints for Direct Messaging (DM) between users in the same workspace.  
+    These endpoints complement the socket-based real-time DM functionality.
+tags:
+  - name: Direct Messages
+    description: Manage one-to-one direct messages between workspace members.
+
+paths:
+  /dm/{workspaceId}/{user1}/{user2}:
+    get:
+      tags:
+        - Direct Messages
+      summary: Get all direct messages between two users in a workspace
+      description: |
+        Fetches the message history between two users (user1 and user2) inside a specific workspace.  
+        The response is sorted in chronological order (oldest → newest).
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the workspace where the users belong.
+        - name: user1
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the first user.
+        - name: user2
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the second user.
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number for paginated results.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+          description: Number of messages per page.
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Optional start date filter for messages.
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Optional end date filter for messages.
+      responses:
+        "200":
+          description: Successful retrieval of direct messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DirectMessage"
+        "403":
+          description: One or both users are not members of the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dm/{messageId}:
+    delete:
+      tags:
+        - Direct Messages
+      summary: Delete a direct message
+      description: Deletes a specific direct message by its message ID.
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique ID of the message to delete.
+      responses:
+        "200":
+          description: Message deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Message deleted successfully.
+                  data:
+                    $ref: "#/components/schemas/DirectMessage"
+        "404":
+          description: Message not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    DirectMessage:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "6731d56bfed23384f0418e9a"
+        workspaceId:
+          type: string
+          example: "6731d40bfed23384f0418e91"
+        sender:
+          type: object
+          properties:
+            _id:
+              type: string
+              example: "6731d4cf3b04cd04e27d8212"
+            username:
+              type: string
+              example: "Aviral"
+            avatar:
+              type: string
+              example: "https://cdn.example.com/avatar1.png"
+        receiver:
+          type: object
+          properties:
+            _id:
+              type: string
+              example: "6731d4cf3b04cd04e27d8111"
+            username:
+              type: string
+              example: "Rahul"
+            avatar:
+              type: string
+              example: "https://cdn.example.com/avatar2.png"
+        content:
+          type: string
+          example: "Hey, can we discuss the project updates?"
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                example: "https://cdn.example.com/files/doc.pdf"
+              filename:
+                type: string
+                example: "doc.pdf"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-11-08T17:43:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-11-08T17:43:00.000Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: Something went wrong.

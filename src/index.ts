@@ -32,6 +32,7 @@ import meetingRoutes from "./routes/meetingRoutes"
 import dmRouter from "./routes/directMessageRoutes";
 
 
+
 const app: Application = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -67,10 +68,11 @@ const workspaceDoc = safeLoadYAML("workspace.yaml");
 const meetingDoc = safeLoadYAML("meeting.yaml");
 const mapDoc = safeLoadYAML("map.yaml");
 const msgDoc = safeLoadYAML("msg.yaml");
+const dmDoc = safeLoadYAML("dm.yaml");
 
 
 
-const mergedDoc = deepmerge.all([ authDoc, meDoc, fileDoc, workspaceDoc, meetingDoc, mapDoc, msgDoc]);
+const mergedDoc = deepmerge.all([ authDoc, meDoc, fileDoc, workspaceDoc, meetingDoc, mapDoc, msgDoc, baseDoc , dmDoc ]);
 
 if (Object.keys(mergedDoc).length > 0) {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));

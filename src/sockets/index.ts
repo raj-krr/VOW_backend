@@ -3,6 +3,7 @@ import { Server as IOServer } from "socket.io";
 import chatSocket from "./chatSocket";
 import { setupPresenceSocket } from "./presenceSocket";
 
+
 export const initSocket = (server: HttpServer) => {
   const io = new IOServer(server, {
     cors: {
