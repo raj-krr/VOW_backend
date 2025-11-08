@@ -50,7 +50,7 @@ jobs:
             fi
 
             echo "Pulling new image..."
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
 
             echo "Stopping old container (if exists)..."
             sudo docker stop vow-auth || true
