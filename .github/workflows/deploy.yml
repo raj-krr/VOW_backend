@@ -57,20 +57,20 @@ jobs:
             fi
 
             echo "Pulling new image..."
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
+             docker pull ${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
 
             echo "Stopping old container (if exists)..."
-            sudo docker stop vow-auth || true
-            sudo docker rm vow-auth || true
+             docker stop vow-auth || true
+             docker rm vow-auth || true
 
             echo "Fetching latest docker-compose.yml..."
             rm -f docker-compose.yml
             curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
 
             echo "Stopping old services..."
-            sudo docker compose down || true
+             docker compose down || true
 
             echo "Starting new services..."
-            sudo docker compose up 
+             docker compose up -d --remove-orphans
 
             echo "Deployment complete at $(date)"
