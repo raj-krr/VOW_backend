@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -21,16 +25,16 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      
+
       - name: Build and Push Docker image
         run: |
-         IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/vow-backend
+          IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/vow-backend
           TAG=latest
-          echo " Building Docker image: $IMAGE_NAME:$TAG"
-           docker image prune -f
+          echo "Building Docker image: $IMAGE_NAME:$TAG"
+          docker image prune -f
           docker build -t $IMAGE_NAME:$TAG .
           docker push $IMAGE_NAME:$TAG
-          echo " Image pushed successfully."
+          echo "Image pushed successfully."
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.1.0
@@ -39,7 +43,10 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Install Docker Compose plugin if not already present
+            set -e
+            echo "=== Starting deployment at $(date) ==="
+
+            # Ensure Docker Compose plugin exists
             if ! docker compose version > /dev/null 2>&1; then
               echo "Installing Docker Compose plugin..."
               DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
@@ -61,9 +68,9 @@ jobs:
             curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
 
             echo "Stopping old services..."
-            docker compose down || true
+            sudo docker compose down || true
 
             echo "Starting new services..."
-            docker compose up -d --remove-orphans
+            sudo docker compose up -d --remove-orphans
 
-            echo "Deployment complete!"
+            echo "Deployment complete at $(date)"
