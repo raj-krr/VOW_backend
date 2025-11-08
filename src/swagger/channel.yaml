@@ -1,0 +1,210 @@
+openapi: 3.0.3
+info:
+  title: Channel Management API
+  version: 1.0.0
+  description: API documentation for managing channels within a workspace.
+
+tags:
+  - name: Channel
+    description: Manage text and voice channels within a workspace.
+
+paths:
+  /channels:
+    post:
+      tags: [Channel]
+      summary: Create a new channel
+      description: Create a new text or voice channel inside a workspace.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - workspaceId
+              properties:
+                name:
+                  type: string
+                  description: The name of the channel.
+                  example: "general"
+                type:
+                  type: string
+                  enum: [text, voice]
+                  default: text
+                  example: "text"
+                workspaceId:
+                  type: string
+                  description: The ID of the workspace (server) this channel belongs to.
+                  example: 671a2e9f12b3456a78c9d001
+                members:
+                  type: array
+                  items:
+                    type: string
+                    example: 671a2e9f12b3456a78c9d002
+      responses:
+        201:
+          description: Channel created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        400:
+          description: Invalid request body.
+        401:
+          description: Unauthorized - Missing or invalid JWT.
+        500:
+          description: Internal server error.
+
+  /channels/workspace/{workspaceId}:
+    get:
+      tags: [Channel]
+      summary: Get all channels in a workspace
+      description: Retrieve all text and voice channels under a given workspace.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The workspace (server) ID.
+      responses:
+        200:
+          description: List of channels retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+        401:
+          description: Unauthorized - Missing or invalid JWT.
+        500:
+          description: Internal server error.
+
+  /channels/{channelId}:
+    delete:
+      tags: [Channel]
+      summary: Delete a channel
+      description: Delete a specific channel by its ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the channel to delete.
+      responses:
+        200:
+          description: Channel deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "channel deleted successfully"
+        400:
+          description: Channel ID missing or invalid.
+        404:
+          description: Channel not found.
+        500:
+          description: Internal server error.
+
+    put:
+      tags: [Channel]
+      summary: Update channel name
+      description: Update the name of a specific channel by its ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the channel to update.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The new name of the channel.
+                  example: "team-discussion"
+      responses:
+        200:
+          description: Channel name updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Channel name updated successfully"
+                  channel:
+                    $ref: "#/components/schemas/Channel"
+        400:
+          description: Missing channelId or name.
+        404:
+          description: Channel not found.
+        500:
+          description: Internal server error.
+
+components:
+  schemas:
+    Channel:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 671a2e9f12b3456a78c9d001
+        name:
+          type: string
+          example: "general"
+        type:
+          type: string
+          enum: [text, voice]
+          example: "text"
+        server:
+          type: string
+          description: The workspace/server ID the channel belongs to.
+          example: 671a2e9f12b3456a78c9d123
+        members:
+          type: array
+          items:
+            type: string
+            example: 671a2e9f12b3456a78c9d002
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-11-08T10:12:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-11-08T10:12:30Z"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -67,10 +67,12 @@ const workspaceDoc = safeLoadYAML("workspace.yaml");
 const meetingDoc = safeLoadYAML("meeting.yaml");
 const mapDoc = safeLoadYAML("map.yaml");
 const msgDoc = safeLoadYAML("msg.yaml");
+const channelDoc = safeLoadYAML("channel.yaml");
+const roomDoc = safeLoadYAML("room.yaml");
 
 
 
-const mergedDoc = deepmerge.all([ authDoc, meDoc, fileDoc, workspaceDoc, meetingDoc, mapDoc, msgDoc]);
+const mergedDoc = deepmerge.all([ authDoc, meDoc, fileDoc, workspaceDoc, meetingDoc, mapDoc, msgDoc,channelDoc, roomDoc]);
 
 if (Object.keys(mergedDoc).length > 0) {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));

@@ -1,0 +1,312 @@
+openapi: 3.0.3
+info:
+  title: Room Management API
+  version: 1.0.0
+  description: API documentation for creating, joining, and managing video chat or collaboration rooms.
+
+tags:
+  - name: Room
+    description: Manage rooms, join/leave sessions, and track user presence.
+
+paths:
+  /rooms:
+    get:
+      tags: [Room]
+      summary: List all rooms
+      description: Retrieve all public rooms. You can include your own private rooms using the `mine=true` query parameter.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mine
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: If true, include rooms created by the current user.
+      responses:
+        200:
+          description: List of rooms retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  rooms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Room"
+        401:
+          description: Unauthorized - Missing or invalid JWT.
+        500:
+          description: Internal server error.
+
+  /rooms/{id}:
+    get:
+      tags: [Room]
+      summary: Get room by ID
+      description: Retrieve details of a specific room using its MongoDB ObjectID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The room's MongoDB ObjectID.
+      responses:
+        200:
+          description: Room retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  room:
+                    $ref: "#/components/schemas/Room"
+        400:
+          description: Invalid ID format.
+        401:
+          description: Unauthorized.
+        403:
+          description: Forbidden - Accessing a private room not created by you.
+        404:
+          description: Room not found.
+        500:
+          description: Internal server error.
+
+  /rooms/by-slug/{slug}:
+    get:
+      tags: [Room]
+      summary: Get room by slug
+      description: Retrieve a room by its unique slug identifier.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The room's unique slug.
+      responses:
+        200:
+          description: Room details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  room:
+                    $ref: "#/components/schemas/Room"
+        401:
+          description: Unauthorized.
+        403:
+          description: Forbidden - Access denied to a private room.
+        404:
+          description: Room not found.
+        500:
+          description: Internal server error.
+
+  /rooms/{id}/join:
+    post:
+      tags: [Room]
+      summary: Join a room
+      description: Join a room and receive a temporary JWT token that grants access for real-time communication.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the room to join.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  example: "John Doe"
+                role:
+                  type: string
+                  enum: [host, participant]
+                  example: "participant"
+                sessionId:
+                  type: string
+                  example: "session-12345"
+      responses:
+        200:
+          description: Successfully joined the room.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    description: JWT room access token.
+                  ttlSeconds:
+                    type: integer
+                    example: 60
+                  roomId:
+                    type: string
+                    example: "671a2e9f12b3456a78c9d001"
+                  displayName:
+                    type: string
+                    example: "John Doe"
+                  role:
+                    type: string
+                    example: "participant"
+        400:
+          description: Invalid ID.
+        401:
+          description: Unauthorized.
+        404:
+          description: Room not found.
+        500:
+          description: Internal server error.
+
+  /rooms/{id}/leave:
+    post:
+      tags: [Room]
+      summary: Leave a room
+      description: Leave a room and remove the user from the active presence list.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The room ID to leave.
+      responses:
+        200:
+          description: Successfully left the room.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        401:
+          description: Unauthorized.
+        500:
+          description: Internal server error.
+
+  /rooms/{id}/presence:
+    get:
+      tags: [Room]
+      summary: Get room presence
+      description: Get a list of users currently present in a specific room.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The room ID to check presence for.
+      responses:
+        200:
+          description: Room presence retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  presence:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId:
+                          type: string
+                          example: "671a2e9f12b3456a78c9d999"
+                        displayName:
+                          type: string
+                          example: "Jane Doe"
+                        role:
+                          type: string
+                          example: "participant"
+                        ts:
+                          type: integer
+                          example: 1731074554872
+        400:
+          description: Invalid ID.
+        401:
+          description: Unauthorized.
+        403:
+          description: Forbidden - Accessing a private room.
+        404:
+          description: Room not found.
+        500:
+          description: Internal server error.
+
+components:
+  schemas:
+    Room:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 671a2e9f12b3456a78c9d001
+        name:
+          type: string
+          example: "Team Standup Meeting"
+        slug:
+          type: string
+          example: "team-standup-meeting"
+        description:
+          type: string
+          example: "Daily team sync meeting for project updates."
+        isPrivate:
+          type: boolean
+          example: false
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            topic: "Daily Sync"
+            timezone: "IST"
+        createdBy:
+          type: string
+          example: "671a2e9f12b3456a78c9d002"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-11-08T10:12:00Z"
+        expiresAt:
+          type: string
+          nullable: true
+          format: date-time
+          example: null
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
