@@ -71,6 +71,6 @@ jobs:
             sudo docker compose down || true
 
             echo "Starting new services..."
-            sudo docker compose up  --remove-orphans
+            sudo docker compose up 
 
             echo "Deployment complete at $(date)"
