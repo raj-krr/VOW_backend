@@ -162,7 +162,7 @@ export const getAllTeams = async (req: Request, res: Response): Promise<void> =>
 
     const teams = await TeamModel.find({ workspaceId })
       .populate("members", "fullName email")
-      .populate("supervisor", "fullName email")
+      .populate("superviser", "fullName email")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -175,5 +175,29 @@ export const getAllTeams = async (req: Request, res: Response): Promise<void> =>
       success: false,
       message: err.message || "Server error",
     });
+  }
+};
+
+export const getTeamMembers = async (req: Request, res: Response) => {
+  try {
+    const { teamId } = req.params;
+
+    if (!teamId) {
+      return res.status(400).json({ success: false, message: "teamId is required" });
+    }
+
+    const team = await TeamModel.findById(teamId).populate("members", "username email avatar");
+
+    if (!team) {
+      return res.status(404).json({ success: false, message: "Team not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Team members fetched successfully",
+      members: team.members,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 };

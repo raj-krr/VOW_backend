@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -24,8 +28,13 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/vow-auth:02 .
-          docker push ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+          IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/vow-backend
+          TAG=latest
+          echo "Building Docker image: $IMAGE_NAME:$TAG"
+          docker image prune -f
+          docker build -t $IMAGE_NAME:$TAG .
+          docker push $IMAGE_NAME:$TAG
+          echo "Image pushed successfully."
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.1.0
@@ -34,7 +43,10 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Install Docker Compose plugin if not already present
+            set -e
+            echo "=== Starting deployment at $(date) ==="
+
+            # Ensure Docker Compose plugin exists
             if ! docker compose version > /dev/null 2>&1; then
               echo "Installing Docker Compose plugin..."
               DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
@@ -45,20 +57,20 @@ jobs:
             fi
 
             echo "Pulling new image..."
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+             docker pull ${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
 
             echo "Stopping old container (if exists)..."
-            sudo docker stop vow-auth || true
-            sudo docker rm vow-auth || true
+             docker stop vow-auth || true
+             docker rm vow-auth || true
 
             echo "Fetching latest docker-compose.yml..."
             rm -f docker-compose.yml
             curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
 
             echo "Stopping old services..."
-            docker compose down || true
+             docker compose down || true
 
             echo "Starting new services..."
-            docker compose up -d --remove-orphans
+             docker compose up -d --remove-orphans
 
-            echo "Deployment complete!"
+            echo "Deployment complete at $(date)"

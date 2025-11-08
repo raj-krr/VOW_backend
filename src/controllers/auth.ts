@@ -179,8 +179,8 @@ const login = async (req: Request<{}, {}, { identifier: string; password: string
   const { accessToken, refreshToken } = user.generateTokens();
   user.refreshToken = refreshToken;
   await user.save();
-
-  return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options).json({ success: true, msg: "Login successful", user: sanitizeUser(user) });
+console.log("for debugging");
+  return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options).json({ success: true, msg: "new login successful", user: sanitizeUser(user) });
 };
 
 // FORGOT PASSWORD
