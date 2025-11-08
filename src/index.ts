@@ -22,12 +22,15 @@ import workspaceRouter from "./routes/workspaceRoute";
 import managerRouter from "./routes/managerRoutes";
 import superviserRouter from "./routes/superviserRoute";
 
+import { dmSocketHandler } from "./sockets/dmSocket";
 // import serverRoutes from "./routes/serverRoutes";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import mapRoutes from "./routes/mapRoutes";
 import roomRoutes from "./routes/roomRoutes";
 import meetingRoutes from "./routes/meetingRoutes"
+import dmRouter from "./routes/directMessageRoutes";
+
 
 const app: Application = express();
 app.use(express.json());
@@ -93,6 +96,8 @@ app.use("/maps", mapRoutes);
 app.use("/", roomRoutes);
 app.use("/meeting",meetingRoutes);
 
+app.use("/dm", dmRouter);
+
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
 
@@ -114,6 +119,7 @@ mongoDb()
   .then(() => {
     const server = http.createServer(app);
     const io = initSocket(server);
+    dmSocketHandler(io);
 
     server.listen(PORT, () => {
       console.log(` Database connected successfully`);
@@ -130,7 +136,7 @@ mongoDb()
 cron.schedule("0 2 * * *", async () => {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   await UserModel.deleteMany({ isVerified: false, createdAt: { $lt: cutoff } });
-  console.log("🧹 Purged stale unverified accounts");
+  console.log("Purged stale unverified accounts");
 });
 
 // Error safety
