@@ -1,7 +1,7 @@
 
 services:
   backend:
-    image: sanchit044/vow-auth:02
+    image: sanchit044/vow-backend:latest
     container_name: vow-backend
     ports:
       - "8000:8000"

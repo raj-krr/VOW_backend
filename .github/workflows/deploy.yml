@@ -24,8 +24,12 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/vow-auth:02 .
-          docker push ${{ secrets.DOCKER_USERNAME }}/vow-auth:02
+         IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/vow-backend
+          TAG=latest
+          echo " Building Docker image: $IMAGE_NAME:$TAG"
+          docker build -t $IMAGE_NAME:$TAG .
+          docker push $IMAGE_NAME:$TAG
+          echo " Image pushed successfully."
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.1.0
