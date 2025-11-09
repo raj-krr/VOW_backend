@@ -1,138 +1,138 @@
 openapi: 3.0.3
 info:
-  title: Map Management API
+  title: Base Map & Presence API
   version: 1.0.0
   description: >
-    This API manages workspace maps — including creation, retrieval,
-    deletion, and real-time presence tracking via Redis.
-
+    This API manages a shared base map layout (stored in MongoDB)
+    and real-time presence tracking (stored in Redis) for workspaces —
+    similar to Cosmos.video's spatial environment.
 
 tags:
   - name: Map
-    description: Endpoints for creating, retrieving, and deleting workspace maps.
-
-security:
-  - bearerAuth: []
+    description: Base map initialization, retrieval, and layout management.
+  - name: Presence
+    description: Real-time workspace presence tracking via Redis.
 
 paths:
-  /maps:
+  /maps/init:
     post:
       tags: [Map]
-      summary: Create a new map
-      security:
-        - bearerAuth: []
-      description: Create a new map with layout URL, rooms, and optional metadata.
+      summary: Initialize base map
+      description: >
+        Initializes a single base map using `data/baseMap.json` if one doesn't already exist.
+      responses:
+        "201":
+          description: Base map created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "200":
+          description: Base map already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "500":
+          description: Server error
+
+  /maps:
+    get:
+      tags: [Map]
+      summary: Get the base map
+      description: >
+        Returns the current base map with dimensions, rooms, and objects.
+      responses:
+        "200":
+          description: Base map details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "404":
+          description: Base map not found
+        "500":
+          description: Server error
+
+    put:
+      tags: [Map]
+      summary: Update base map layout
+      description: >
+        Updates rooms, objects, or metadata for the base map.
+        Intended for admin or map designer use.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [name, layoutUrl]
               properties:
-                name:
-                  type: string
-                  example: "Office Layout - Ground Floor"
-                layoutUrl:
-                  type: string
-                  example: "https://example.com/layouts/floor1.png"
                 rooms:
                   type: array
                   items:
-                    type: string
-                    example: "671fbca0123456abcd789ef1"
+                    $ref: "#/components/schemas/Room"
+                objects:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/MapObject"
                 metadata:
                   type: object
                   additionalProperties: true
-                  example:
-                    floor: 1
-                    department: "Engineering"
       responses:
-        "201":
-          description: Map created successfully
+        "200":
+          description: Map updated successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MapResponse"
-        "400":
-          description: Invalid request data
-        "500":
-          description: Server error
-
-    get:
-      tags: [Map]
-      summary: Get all maps
-      description: Retrieve all maps, sorted by creation time (newest first).
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: List of maps
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  maps:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Map"
-        "500":
-          description: Server error
-
-  /maps/{mapId}:
-    get:
-      tags: [Map]
-      summary: Get a map by ID
-      description: Retrieve detailed information about a specific map.
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: mapId
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "671fbca0123456abcd789ef1"
-      responses:
-        "200":
-          description: Map details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  map:
-                    $ref: "#/components/schemas/Map"
-        "400":
-          description: Invalid map ID
         "404":
-          description: Map not found
+          description: Base map not found
         "500":
           description: Server error
 
-    delete:
-      tags: [Map]
-      summary: Delete a map
-      description: Deletes a map by its ID.
-      security:
-        - bearerAuth: []
+  /maps/{workspaceId}/presence:
+    post:
+      tags: [Presence]
+      summary: Update user presence
+      description: >
+        Stores or updates a user's position, room, and metadata in Redis
+        for a specific workspace.
       parameters:
-        - name: mapId
+        - name: workspaceId
           in: path
           required: true
           schema:
             type: string
-            example: "671fbca0123456abcd789ef1"
+            example: "workspace-001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, x, y]
+              properties:
+                userId:
+                  type: string
+                  example: "user-123"
+                x:
+                  type: number
+                  example: 1280
+                y:
+                  type: number
+                  example: 720
+                roomId:
+                  type: string
+                  example: "room-meeting"
+                name:
+                  type: string
+                  example: "John Doe"
+                avatarUrl:
+                  type: string
+                  example: "https://example.com/avatars/john.png"
       responses:
         "200":
-          description: Map deleted successfully
+          description: Presence updated successfully
           content:
             application/json:
               schema:
@@ -143,31 +143,27 @@ paths:
                     example: true
                   msg:
                     type: string
-                    example: Map deleted successfully
+                    example: Presence updated
         "400":
-          description: Invalid map ID
-        "404":
-          description: Map not found
+          description: Missing workspaceId or userId
         "500":
           description: Server error
 
-  /maps/{mapId}/presence:
     get:
-      tags: [Map]
-      summary: Get map presence
-      description: Returns current user presence in the map (from Redis).
-      security:
-        - bearerAuth: []
+      tags: [Presence]
+      summary: Get workspace presence
+      description: >
+        Fetches all active user presence data for a workspace from Redis.
       parameters:
-        - name: mapId
+        - name: workspaceId
           in: path
           required: true
           schema:
             type: string
-            example: "671fbca0123456abcd789ef1"
+            example: "workspace-001"
       responses:
         "200":
-          description: Presence data retrieved successfully
+          description: Presence list retrieved successfully
           content:
             application/json:
               schema:
@@ -179,57 +175,52 @@ paths:
                   presence:
                     type: array
                     items:
-                      type: object
-                      example:
-                        userId: "64fa1234a4e2b5f6d1a2e7b8"
-                        username: "John Doe"
-                        position:
-                          x: 120
-                          y: 300
+                      $ref: "#/components/schemas/Presence"
         "400":
-          description: Invalid map ID
+          description: Invalid workspaceId
+        "500":
+          description: Server error
+
+  /maps/{workspaceId}/presence/{userId}:
+    delete:
+      tags: [Presence]
+      summary: Remove user presence
+      description: >
+        Deletes a user's presence record from Redis for a given workspace.
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "workspace-001"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "user-123"
+      responses:
+        "200":
+          description: User presence removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  msg:
+                    type: string
+                    example: User presence removed
+        "400":
+          description: Invalid parameters
         "500":
           description: Server error
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   schemas:
-    Map:
-      type: object
-      properties:
-        _id:
-          type: string
-          example: "671fbca0123456abcd789ef1"
-        name:
-          type: string
-          example: "Corporate HQ Layout"
-        layoutUrl:
-          type: string
-          example: "https://example.com/layouts/hq.png"
-        rooms:
-          type: array
-          items:
-            type: string
-            example: "671fbca0123456abcd789ef9"
-        createdBy:
-          type: string
-          example: "671fbca0123456abcd789e01"
-        createdAt:
-          type: string
-          format: date-time
-          example: "2025-10-31T10:00:00.000Z"
-        metadata:
-          type: object
-          additionalProperties: true
-          example:
-            theme: "Corporate"
-            floor: 2
-
     MapResponse:
       type: object
       properties:
@@ -238,3 +229,127 @@ components:
           example: true
         map:
           $ref: "#/components/schemas/Map"
+
+    Map:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "672a3fa95d2e0f30b43f42a1"
+        name:
+          type: string
+          example: "Base Office Map"
+        dimensions:
+          type: object
+          properties:
+            width:
+              type: number
+              example: 3100
+            height:
+              type: number
+              example: 2380
+        rooms:
+          type: array
+          items:
+            $ref: "#/components/schemas/Room"
+        objects:
+          type: array
+          items:
+            $ref: "#/components/schemas/MapObject"
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            initializedAt: "2025-11-09T06:00:00.000Z"
+
+    Room:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "room-manager"
+        name:
+          type: string
+          example: "Manager Cabin"
+        area:
+          type: object
+          properties:
+            x:
+              type: number
+              example: 2620
+            y:
+              type: number
+              example: 212
+            width:
+              type: number
+              example: 323
+            height:
+              type: number
+              example: 240
+        metadata:
+          type: object
+          example:
+            capacity: 5
+
+    MapObject:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "tableA"
+        type:
+          type: string
+          example: "table"
+        roomId:
+          type: string
+          example: "room-tableA"
+        position:
+          type: object
+          properties:
+            x:
+              type: number
+              example: 12.5
+            y:
+              type: number
+              example: 21.5
+        imageSize:
+          type: number
+          example: 450
+        collision:
+          type: object
+          properties:
+            width:
+              type: number
+              example: 300
+            height:
+              type: number
+              example: 200
+        metadata:
+          type: object
+          example:
+            texture: "wood"
+
+    Presence:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "user-123"
+        x:
+          type: number
+          example: 1280
+        y:
+          type: number
+          example: 720
+        roomId:
+          type: string
+          example: "room-meeting"
+        name:
+          type: string
+          example: "John Doe"
+        avatarUrl:
+          type: string
+          example: "https://example.com/avatar.png"
+        updatedAt:
+          type: integer
+          example: 1736448123
