@@ -1,83 +1,141 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import mongoose from "mongoose";
 import Map from "../models/map";
 import { getRedis } from "../libs/redis";
 
 const redisClient = getRedis();
 
-export const createMap = async (req: Request, res: Response) => {
-  try {
-    const { name, layoutUrl, rooms, metadata } = req.body;
-    const createdBy = (req as any).user?.id || req.header("x-user-id");
 
-    if (!name || !layoutUrl) {
-      return res
-        .status(400)
-        .json({ success: false, msg: "Missing name or layoutUrl" });
+export const initBaseMap = async (req: Request, res: Response) => {
+  try {
+    const existingMap = await Map.findOne();
+    if (existingMap) {
+      return res.json({
+        success: true,
+        msg: "Base map already exists",
+        map: existingMap,
+      });
     }
 
-    const map = new Map({
-      name,
-      layoutUrl,
-      rooms: rooms || [],
-      createdBy,
-      metadata,
+    const layoutPath = path.join(__dirname, "../../data/baseMap.json");
+    const layoutData = JSON.parse(fs.readFileSync(layoutPath, "utf8"));
+
+    const newMap = new Map({
+      name: layoutData.name || "Base Office Map",
+      dimensions: layoutData.dimensions,
+      rooms: layoutData.rooms,
+      objects: layoutData.objects,
+      metadata: { initializedAt: new Date() },
     });
 
-    await map.save();
-    res.status(201).json({ success: true, map });
+    await newMap.save();
+    return res
+      .status(201)
+      .json({ success: true, msg: "Base map created", map: newMap });
   } catch (err) {
-    console.error("createMap error:", err);
-    res.status(500).json({ success: false, msg: "Server error" });
+    console.error("initBaseMap error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
   }
 };
 
-export const getMaps = async (req: Request, res: Response) => {
+/**
+ * Get the base map details (rooms, objects, etc.)
+ */
+export const getBaseMap = async (_req: Request, res: Response) => {
   try {
-    const maps = await Map.find().populate("rooms").sort({ createdAt: -1 });
-    res.json({ success: true, maps });
-  } catch (err) {
-    console.error("getMaps error:", err);
-    res.status(500).json({ success: false, msg: "Server error" });
-  }
-};
-
-export const getMapById = async (req: Request, res: Response) => {
-  try {
-    const { mapId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(mapId)) {
-      return res.status(400).json({ success: false, msg: "Invalid map ID" });
-    }
-
-    const map = await Map.findById(mapId).populate("rooms");
+    const map = await Map.findOne();
     if (!map)
-      return res.status(404).json({ success: false, msg: "Map not found" });
+      return res
+        .status(404)
+        .json({ success: false, msg: "Base map not initialized" });
 
-    res.json({ success: true, map });
+    return res.json({ success: true, map });
   } catch (err) {
-    console.error("getMapById error:", err);
-    res.status(500).json({ success: false, msg: "Server error" });
+    console.error("getBaseMap error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
   }
 };
 
-
-export const getMapPresence = async (req: Request, res: Response) => {
+/**
+ * Update map rooms/objects dynamically
+ * Useful for admin panel or design updates
+ */
+export const updateMapLayout = async (req: Request, res: Response) => {
   try {
-    const { mapId } = req.params;
+    const { rooms, objects, metadata } = req.body;
+    const map = await Map.findOne();
+    if (!map)
+      return res.status(404).json({ success: false, msg: "Base map not found" });
 
-    if (!mapId) {
+    if (rooms) map.rooms = rooms;
+    if (objects) map.objects = objects;
+    if (metadata) map.metadata = metadata;
+
+    await map.save();
+    return res.json({ success: true, map });
+  } catch (err) {
+    console.error("updateMapLayout error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+/**
+ * Store or update presence in Redis for a specific workspace
+ * Expects: { userId, x, y, roomId, avatarUrl?, name? }
+ */
+export const updatePresence = async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const { userId, x, y, roomId, name, avatarUrl } = req.body;
+
+    if (!workspaceId || !userId)
       return res
         .status(400)
-        .json({ success: false, msg: "mapId is required" });
-    }
+        .json({ success: false, msg: "workspaceId and userId are required" });
 
-    if (!redisClient) {
-      console.warn("Redis client unavailable");
-      return res.json({ success: true, presence: [] });
-    }
+    if (!redisClient)
+      return res
+        .status(500)
+        .json({ success: false, msg: "Redis client not available" });
 
-    const key = `map:${mapId}:presence`;
+    const key = `map:${workspaceId}:presence`;
+    const payload = JSON.stringify({
+      userId,
+      x,
+      y,
+      roomId,
+      name,
+      avatarUrl,
+      updatedAt: Date.now(),
+    });
+
+    await redisClient.hset(key, userId, payload);
+    await redisClient.expire(key, 60 * 30); // expire after 30 minutes inactivity
+
+    return res.json({ success: true, msg: "Presence updated" });
+  } catch (err) {
+    console.error("updatePresence error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+export const getPresence = async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+
+    if (!workspaceId)
+      return res
+        .status(400)
+        .json({ success: false, msg: "workspaceId is required" });
+
+    if (!redisClient)
+      return res
+        .status(500)
+        .json({ success: false, msg: "Redis client not available" });
+
+    const key = `map:${workspaceId}:presence`;
     const data = await redisClient.hgetall(key);
 
     const presence = Object.keys(data || {}).map((userId) => {
@@ -88,29 +146,33 @@ export const getMapPresence = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({ success: true, presence });
+    return res.json({ success: true, presence });
   } catch (err) {
-    console.error("getMapPresence error:", err);
-    res.status(500).json({ success: false, msg: "Server error" });
+    console.error("getPresence error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
   }
 };
 
-
-export const deleteMap = async (req: Request, res: Response) => {
+export const removePresence = async (req: Request, res: Response) => {
   try {
-    const { mapId } = req.params;
+    const { workspaceId, userId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(mapId)) {
-      return res.status(400).json({ success: false, msg: "Invalid map ID" });
-    }
+    if (!workspaceId || !userId)
+      return res
+        .status(400)
+        .json({ success: false, msg: "workspaceId and userId required" });
 
-    const deleted = await Map.findByIdAndDelete(mapId);
-    if (!deleted)
-      return res.status(404).json({ success: false, msg: "Map not found" });
+    if (!redisClient)
+      return res
+        .status(500)
+        .json({ success: false, msg: "Redis client not available" });
 
-    res.json({ success: true, msg: "Map deleted successfully" });
+    const key = `map:${workspaceId}:presence`;
+    await redisClient.hdel(key, userId);
+
+    return res.json({ success: true, msg: "User presence removed" });
   } catch (err) {
-    console.error("deleteMap error:", err);
-    res.status(500).json({ success: false, msg: "Server error" });
+    console.error("removePresence error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
   }
 };

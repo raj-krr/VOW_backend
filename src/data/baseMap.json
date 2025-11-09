@@ -1,0 +1,62 @@
+{
+  "name": "Base Office Map",
+  "dimensions": { "width": 3100, "height": 2380 },
+  "objects": [
+    {
+      "id": "tableA",
+      "type": "table",
+      "roomId": "room-tableA",
+      "position": { "x": 12.5, "y": 21.5 },
+      "imageSize": 450,
+      "collision": { "width": 300, "height": 200 }
+    },
+    {
+      "id": "bigtable",
+      "type": "bigtable",
+      "roomId": "room-bigtable",
+      "position": { "x": 10.5, "y": 76 },
+      "imageSize": 550,
+      "collision": { "width": 160, "height": 430 }
+    },
+    {
+      "id": "cabin",
+      "type": "cabin",
+      "roomId": "room-cabin",
+      "position": { "x": 48.2, "y": 33 }
+    },
+    {
+      "id": "tableB",
+      "type": "table",
+      "roomId": "room-tableB",
+      "position": { "x": 85, "y": 50 },
+      "imageSize": 450
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room-manager",
+      "name": "Manager Cabin",
+      "area": { "x": 2620, "y": 212, "width": 323, "height": 240 }
+    },
+    {
+      "id": "room-supervisor",
+      "name": "Supervisor Cabin",
+      "area": { "x": 2639, "y": 1620, "width": 323, "height": 240 }
+    },
+    {
+      "id": "room-gaming",
+      "name": "Gaming Room",
+      "area": { "x": 2639, "y": 1890, "width": 323, "height": 240 }
+    },
+    {
+      "id": "room-privateRoom",
+      "name": "Private Room",
+      "area": { "x": 920, "y": 1895, "width": 1040, "height": 240 }
+    },
+    {
+      "id": "room-welcomeZone",
+      "name": "Welcome Zone",
+      "area": { "x": 920, "y": 1550, "width": 1040, "height": 240 }
+    }
+  ]
+}

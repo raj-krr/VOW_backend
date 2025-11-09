@@ -1,22 +1,24 @@
 import express from "express";
 import {
-  createMap,
-  getMaps,
-  getMapById,
-  getMapPresence,
-  deleteMap,
+  initBaseMap,
+  getBaseMap,
+  updateMapLayout,
+  updatePresence,
+  getPresence,
+  removePresence,
 } from "../controllers/mapController";
 
 const router = express.Router();
 
-router.post("/", createMap);
+router.post("/init", initBaseMap);
+router.get("/", getBaseMap);
 
-router.get("/", getMaps);
+router.put("/", updateMapLayout);
 
-router.get("/:mapId", getMapById);
+router.post("/:workspaceId/presence", updatePresence);
 
-router.get("/:mapId/presence", getMapPresence);
+router.get("/:workspaceId/presence", getPresence);
+router.delete("/:workspaceId/presence/:userId", removePresence);
 
-router.delete("/:mapId", deleteMap);
 
 export default router;
