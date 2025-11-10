@@ -1,30 +1,26 @@
 import { z } from "zod";
-
-const noEmojisRegex = /^[\p{L}\p{N}\p{P}\p{Zs}]+$/u;
+import { noEmojisRegex, noEmojis } from "../utils/regex"; 
 
 export const updateMeSchema = z.object({
   fullName: z
     .string()
-    .min(3, "Full name cannot be empty")
-    .refine((val) => noEmojisRegex.test(val), {
-      message: "Full name cannot contain emojis or special symbols",
-    })
+    .min(3, "Full name must be at least 3 characters")
+    .refine((v) => noEmojisRegex.test(v), noEmojis("Full name"))
     .optional(),
 
   organisation: z
     .string()
-    .min(3, "Organisation cannot be empty")
-    .refine((val) => noEmojisRegex.test(val), {
-      message: "Organisation name cannot contain emojis or special symbols",
-    })
+    .min(3, "Organisation name must be at least 3 characters")
+    .refine((v) => noEmojisRegex.test(v), noEmojis("Organisation"))
     .optional(),
 
   gender: z.enum(["male", "female", "other"]).optional(),
 
   dob: z
     .string()
-    .refine((date) => !isNaN(Date.parse(date)), {
-      message: "Invalid date format",
-    })
+    .refine((date) => {
+      const parsed = Date.parse(date);
+      return !isNaN(parsed);
+    }, { message: "Invalid date format. Use ISO format (YYYY-MM-DD)." })
     .optional(),
 });

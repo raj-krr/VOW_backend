@@ -8,7 +8,6 @@ const noEmojis = (fieldName: string) => ({
 
 export const registerSchema = z.object({
   email: z
-    .string()
     .email("Invalid email address")
     .refine((v) => noEmojisRegex.test(v), noEmojis("Email")),
   username: z
