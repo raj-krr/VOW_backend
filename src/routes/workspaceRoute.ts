@@ -3,12 +3,12 @@ import { createWorkspace, joinWorkspace,getWorkspaceDetails,rejoinWorkspace,work
 import { verifyJWT } from "../middlewares/authmiddleware";
 import { verifyWorkspaceToken } from "../middlewares/workspace.middleware";
 import { validate } from "../middlewares/validate";
-// import { createWorkspaceSchema, joinWorkspaceSchema } from "../schemas/workspace";
+import { createWorkspaceSchema, joinWorkspaceSchema } from "../schemas/workspace";
 
 const workspaceRouter = express.Router();
 
-workspaceRouter.post("/create", verifyJWT, createWorkspace);
- workspaceRouter.post("/join", verifyJWT, joinWorkspace);
+workspaceRouter.post("/create",validate(createWorkspaceSchema), verifyJWT, createWorkspace);
+ workspaceRouter.post("/join",validate(joinWorkspaceSchema), verifyJWT, joinWorkspace);
 workspaceRouter.get("/details", verifyJWT, getWorkspaceDetails);
 
 workspaceRouter.delete("/:workspaceId",verifyJWT,deleteWorkspace);
