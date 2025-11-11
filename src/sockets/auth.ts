@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import UserModel from "../models/user";
 import { Socket } from "socket.io";
+import cookie from "cookie";
 
 export interface DecodedToken {
   _id: string;
@@ -13,7 +14,7 @@ export const verifySocketToken = async (token?: string) => {
   if (!token) throw new Error("No token provided");
   const decoded = jwt.verify(
     token,
-    process.env.JWT_ACCESS_SECRET as string
+    process.env.ACCESS_TOKEN_SECRET as string
   ) as DecodedToken;
   if (!decoded?._id) throw new Error("Invalid token");
   const user = await UserModel.findById(decoded._id).select(
@@ -24,20 +25,22 @@ export const verifySocketToken = async (token?: string) => {
 };
 
 export const getTokenFromSocket = (socket: Socket): string | undefined => {
-  const authToken = (socket.handshake.auth &&
-    (socket.handshake.auth as any).token) as string | undefined;
+  const authToken = socket.handshake.auth?.token as string | undefined;
   if (authToken) return authToken;
 
-  const cookie = socket.handshake.headers.cookie;
-  if (!cookie) return undefined;
-  const pairs = cookie.split(";").map((c) => c.trim());
-  for (const p of pairs) {
-    if (p.startsWith("Authorization=")) {
-      const val = p.split("=")[1];
-      if (val?.startsWith("Bearer ")) return val.replace("Bearer ", "");
-      return val;
-    }
-    if (p.startsWith("token=")) return p.split("=")[1];
-  }
-  return undefined;
+  const cookieHeader = socket.handshake.headers.cookie;
+  if (!cookieHeader) return undefined;
+
+  const cookies = cookie.parse(cookieHeader);
+  let token =
+    cookies.accessToken ||
+    cookies.Authorization ||
+    cookies.token ||
+    cookies.jwt ||
+    undefined;
+
+  if (!token) return undefined;
+  if (token.startsWith("Bearer ")) token = token.slice(7);
+
+  return token;
 };
