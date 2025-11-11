@@ -30,6 +30,8 @@ import mapRoutes from "./routes/mapRoutes";
 import roomRoutes from "./routes/roomRoutes";
 import meetingRoutes from "./routes/meetingRoutes";
 import dmRouter from "./routes/directMessageRoutes";
+import { initVideoChat } from "./videochat/init";
+
 
 const app: Application = express();
 app.use(express.json());
@@ -143,16 +145,54 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
 // Start server after DB connects
 const PORT = process.env.PORT || 8000;
 mongoDb()
-  .then(() => {
+  .then(async () => {
     const server = http.createServer(app);
     const io = initSocket(server);
     dmSocketHandler(io);
+
+    let videochatHandle: { shutdown?: () => Promise<void> } | undefined;
+    try {
+      videochatHandle = await initVideoChat(app, server);
+      console.log("Videochat mounted at /videochat and /signaling");
+    } catch (err) {
+      console.error("Failed to init videochat", err);
+      process.exit(1);
+    }
 
     server.listen(PORT, () => {
       console.log(` Database connected successfully`);
       console.log(` Server running  at http://localhost:${PORT}`);
       console.log(` Swagger Docs: http://localhost:${PORT}/api-docs`);
     });
+
+    const graceful = async (signal: string) => {
+      console.log(`${signal} received, shutting down gracefully`);
+      try {
+        if (videochatHandle && videochatHandle.shutdown) {
+          await videochatHandle.shutdown();
+        }
+      } catch (e) {
+        console.error("Error shutting down videochat:", e);
+      }
+
+      try {
+        server.close(() => {
+          console.log("Server closed");
+          process.exit(0);
+        });
+
+        setTimeout(() => {
+          console.warn("Forcing shutdown");
+          process.exit(1);
+        }, 10000);
+      } catch (e) {
+        console.error("Error during shutdown:", e);
+        process.exit(1);
+      }
+    };
+
+    process.on("SIGTERM", () => graceful("SIGTERM"));
+    process.on("SIGINT", () => graceful("SIGINT"));
   })
   .catch((err) => {
     console.error("Database connection failed", err);
