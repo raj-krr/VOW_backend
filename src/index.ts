@@ -28,23 +28,28 @@ import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import mapRoutes from "./routes/mapRoutes";
 import roomRoutes from "./routes/roomRoutes";
-import meetingRoutes from "./routes/meetingRoutes"
+import meetingRoutes from "./routes/meetingRoutes";
 import dmRouter from "./routes/directMessageRoutes";
-
-
 
 const app: Application = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
 app.use(express.json());
 
-app.use(cors({
-  origin: [process.env.FRONTEND_URL as string, "http://localhost:5173", process.env.RENDER_URL as string, process.env.FRONTEND_URL_PROD as string],
+app.use(
+  cors({
+    origin: [
+      process.env.FRONTEND_URL as string,
+      "http://localhost:5173",
+      process.env.RENDER_URL as string,
+      process.env.FRONTEND_URL_PROD as string,
+      process.env.FRONTEND_URL_DEV as string,
+    ],
 
-  credentials: true,
-}));
+    credentials: true,
+  })
+);
 
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
@@ -72,35 +77,50 @@ const channelDoc = safeLoadYAML("channel.yaml");
 const roomDoc = safeLoadYAML("room.yaml");
 const dmDoc = safeLoadYAML("dm.yaml");
 
-const mergedDoc = deepmerge.all([ authDoc, meDoc, fileDoc, workspaceDoc, meetingDoc, mapDoc, msgDoc,channelDoc, roomDoc, dmDoc, baseDoc ]);
+const mergedDoc = deepmerge.all([
+  authDoc,
+  meDoc,
+  fileDoc,
+  workspaceDoc,
+  meetingDoc,
+  mapDoc,
+  msgDoc,
+  channelDoc,
+  roomDoc,
+  dmDoc,
+  baseDoc,
+]);
 
 if (Object.keys(mergedDoc).length > 0) {
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc as Record<string, any>));
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(mergedDoc as Record<string, any>)
+  );
   console.log(` Swagger Docs loaded at /api-docs`);
 } else {
   console.warn(" No Swagger docs found, skipping /api-docs route");
 }
 
 // API routes
-app.use( ipLimiter);
+app.use(ipLimiter);
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me", meRouter);
-app.use("/files",fileRouter);
+app.use("/files", fileRouter);
 
 // app.use("/api/servers", serverRoutes);
 app.use("/channels", channelRoutes);
 app.use("/messages", messageRoutes);
-app.use("/workspaces",workspaceRouter);
-app.use("/manager",managerRouter);
-app.use("/superviser" ,superviserRouter);
+app.use("/workspaces", workspaceRouter);
+app.use("/manager", managerRouter);
+app.use("/superviser", superviserRouter);
 
 app.use("/maps", mapRoutes);
 app.use("/", roomRoutes);
-app.use("/meeting",meetingRoutes);
+app.use("/meeting", meetingRoutes);
 
 app.use("/dm", dmRouter);
-
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error("Central error handler ->", err);
@@ -113,7 +133,9 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   res.status(statusCode).json({
     success: false,
     msg: error.message,
-    ...(process.env.NODE_ENV !== "production" ? { stack: (error as any).stack } : {}),
+    ...(process.env.NODE_ENV !== "production"
+      ? { stack: (error as any).stack }
+      : {}),
   });
 });
 
