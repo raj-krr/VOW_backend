@@ -22,6 +22,7 @@
     "@types/redis": "^4.0.10",
     "@types/socket.io-redis": "^1.0.27",
     "@types/swagger-ui-express": "^4.1.8",
+    "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "@types/yamljs": "^0.2.34",
     "nodemon": "^3.1.10",
@@ -58,7 +59,7 @@
     "socket.io-client": "^4.8.1",
     "socket.io-redis": "^5.4.0",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^13.0.0",
+    "uuid": "^8.3.2",
     "ws": "^8.18.3",
     "yamljs": "^0.3.0",
     "zod": "^4.1.12"
