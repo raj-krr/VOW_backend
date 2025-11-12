@@ -23,7 +23,6 @@ import managerRouter from "./routes/managerRoutes";
 import superviserRouter from "./routes/superviserRoute";
 
 import { dmSocketHandler } from "./sockets/dmSocket";
-// import serverRoutes from "./routes/serverRoutes";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import mapRoutes from "./routes/mapRoutes";
