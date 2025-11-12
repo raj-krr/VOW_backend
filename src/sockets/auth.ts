@@ -29,9 +29,11 @@ export const getTokenFromSocket = (socket: Socket): string | undefined => {
   if (authToken) return authToken;
 
   const cookieHeader = socket.handshake.headers.cookie;
+  console.log('Cookie Header:', cookieHeader);
   if (!cookieHeader) return undefined;
 
   const cookies = cookie.parse(cookieHeader);
+  console.log('Cookies:', cookies);
   let token =
     cookies.accessToken ||
     cookies.Authorization ||
