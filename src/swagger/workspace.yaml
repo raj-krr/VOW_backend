@@ -284,6 +284,38 @@ paths:
         '403':
           description: Permission denied
 
+  /manager/team/add-members/{workspaceId}/{teamId}:
+    put:
+      summary: Add members to team (Admin or Supervisor)
+      tags: [Team - Admin]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberIds]
+              properties:
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Members added successfully
+        '403':
+          description: Permission denied
+
   /manager/team/assign-lead/{workspaceId}/{teamId}:
     put:
       summary: Assign team lead (Admin only)
