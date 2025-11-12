@@ -1,6 +1,7 @@
 
 services:
   backend:
+    build: .
     image: sanchit044/vow-backend:latest
     container_name: vow-backend
     ports:
