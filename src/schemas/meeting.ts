@@ -15,6 +15,7 @@ export const scheduleMeetingSchema = z
     title: z
       .string()
       .min(3, "Meeting title must be at least 3 characters")
+      .max(50, "meeting title must be less than 50 character")
       .refine((v) => noEmojisRegex.test(v), noEmojis("Meeting title")),
 
     description: z
@@ -47,6 +48,7 @@ export const updateMeetingSchema = z.object({
   title: z
     .string()
     .min(3, "Meeting title must be at least 3 characters")
+    .max(30, "meeting titel must be less than 30 character")
     .refine((v) => noEmojisRegex.test(v), noEmojis("Meeting title"))
     .optional(),
 

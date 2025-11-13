@@ -13,10 +13,12 @@ export const registerSchema = z.object({
   username: z
     .string()
     .min(3, "Username must be at least 3 characters")
+    .max(15, "username must be less than 15 character")
     .refine((v) => noEmojisRegex.test(v), noEmojis("Username")),
   password: z
     .string()
     .min(6, "Password must be at least 6 characters")
+    .max(15,"password must be less than 15 characters")
     .refine((v) => noEmojisRegex.test(v), noEmojis("Password")),
 });
 
@@ -31,6 +33,7 @@ export const loginSchema = z.object({
   identifier: z
     .string()
     .min(3, "Email or username is required")
+    .max(30,"Email or username must be less than 30 character ")
     .refine((v) => noEmojisRegex.test(v), noEmojis("Identifier")),
   password: z
     .string()

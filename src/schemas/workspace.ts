@@ -5,6 +5,7 @@ export const createWorkspaceSchema = z.object({
   workspaceName: z
     .string()
     .min(3, "Workspace name must be at least 3 characters")
+    .max(25, "workspace name must be less than 25 character")
     .refine((v) => noEmojisRegex.test(v), noEmojis("Workspace name")),
   inviteEmails: z
     .array(
