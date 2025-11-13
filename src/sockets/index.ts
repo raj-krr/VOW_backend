@@ -18,6 +18,7 @@ export const initSocket = (server: HttpServer) => {
       process.env.FRONTEND_URL_DEV as string,
     ],
       credentials: true,
+      allowedHeaders: ["Authorization", "Content-Type"],
     },
     transports: ["websocket", "polling"],
   });
