@@ -5,31 +5,43 @@ import { setupPresenceSocket } from "./presenceSocket";
 
 export const initSocket = (server: HttpServer) => {
   const io = new IOServer(server, {
-    cors: {
-      origin: [
-        process.env.FRONTEND_URL as string,
-        "https://vow-org.me",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        process.env.RENDER_URL as string,
-        process.env.FRONTEND_URL_PROD as string,
-        process.env.FRONTEND_URL_DEV as string,
-      ],
-      credentials: true,
-      allowedHeaders: ["Authorization", "Content-Type"],
-    },
-    transports: ["websocket", "polling"],
-  });
+  cors: {
+    origin: [
+      process.env.FRONTEND_URL as string,
+      "https://vow-org.me", 
+      "http://localhost:5173",
+      "http://127.0.0.1:3000",
+      process.env.RENDER_URL as string,
+      process.env.FRONTEND_URL_PROD as string,
+      process.env.FRONTEND_URL_DEV as string,
+    ],
+    credentials: true,
+    allowedHeaders: ["Authorization", "Content-Type"],
+  },
+  transports: ["websocket", "polling"],
+  allowUpgrades: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  cookie: true,
+  allowEIO3: true
+});
 
   io.on("connection", (socket) => {
     console.log("Socket user connected:", socket.id);
+    
+    // Initialize socket modules
     chatSocket(io, socket);
     setupPresenceSocket(io, socket);
-  });
 
-  // Fixed: "disconnect" not "disconnected"
-  io.on("disconnect", (socket) => {
-    console.log("Socket user disconnected", socket.id);
+    // ✅ CORRECT: disconnect event on socket, not io
+    socket.on("disconnect", (reason) => {
+      console.log("Socket user disconnected:", socket.id, "Reason:", reason);
+    });
+
+    // Optional: handle individual socket errors
+    socket.on("error", (error) => {
+      console.error("Socket error:", socket.id, error);
+    });
   });
 
   console.log("Socket.IO initialized with chat and presence modules");
