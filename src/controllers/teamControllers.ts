@@ -85,6 +85,36 @@ export const renameTeam = async (req: Request, res: Response) => {
   }
 };
 
+export const addMembers = async (req: Request, res: Response) => {
+  try {
+    const { memberIds } = req.body;
+    const { teamId } = req.params;
+    const workspaceUser = req.workspaceUser;
+    if (!workspaceUser) throw new ApiError(401, "Unauthorized");
+
+    const { workspaceId, userId } = workspaceUser;
+
+    const workspace = await WorkspaceModel.findById(workspaceId);
+    if (!workspace) throw new ApiError(404, "Workspace not found");
+    const team = await TeamModel.findById(teamId);
+    if (!team) throw new ApiError(404, "Team not found");
+    if (
+      workspace.manager.toString() !== userId.toString() &&
+      team.superviser?.toString() !== userId.toString()
+    )
+      throw new ApiError(403, "You are not allowed to add members");
+    const validMembers = memberIds.filter((id: string) =>
+      workspace.members.map((m) => m.toString()).includes(id)
+    );
+
+    team.members.push(...validMembers);
+    await team.save();
+
+    res.json({ success: true, message: "Members added", team });
+  } catch (err: any) {
+    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+  }
+};
 
 export const removeMember = async (req: Request, res: Response) => {
   try {

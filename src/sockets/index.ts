@@ -9,6 +9,7 @@ export const initSocket = (server: HttpServer) => {
     cors: {
       origin: [
       process.env.FRONTEND_URL as string,
+      "https://vow-org.me",
       "http://localhost:5173",
       "http://127.0.0.1:3000",
       process.env.RENDER_URL as string,
