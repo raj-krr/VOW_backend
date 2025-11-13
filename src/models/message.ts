@@ -15,7 +15,7 @@ const messageSchema = new Schema<IMessage>(
   {
     channelId: { type: Schema.Types.ObjectId, ref: "Channel", required: true },
     sender: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    content: { type: String, required: true },
+    content: { type: String },
     attachments: [{ url: String, filename: String }],
   },
   { timestamps: true }

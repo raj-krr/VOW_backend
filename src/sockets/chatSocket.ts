@@ -35,7 +35,7 @@ export default function chatSocket(io: Server) {
         try {
           const { channelId, content, attachments } = payload;
           // basic validation
-          if (!content || !channelId) return socket.emit("error", "Invalid message");
+          if ((attachments?.length === 0 || !attachments) && (!content || content.trim() === "") || !channelId) return socket.emit("error", "Invalid message");
           const channel = await Channel.findById(channelId);
           if (!channel) return socket.emit("error", "Channel not found");
 
