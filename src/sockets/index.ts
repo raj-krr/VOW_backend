@@ -6,7 +6,6 @@ import { setupPresenceSocket } from "./presenceSocket";
 
 export const initSocket = (server: HttpServer) => {
   const io = new IOServer(server, {
-     path: "/socket.io/",
     cors: {
       origin: [
       process.env.FRONTEND_URL as string,
