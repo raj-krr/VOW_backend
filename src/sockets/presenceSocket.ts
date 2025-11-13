@@ -1,18 +1,29 @@
 import { Server, Socket } from "socket.io";
 import { getRedis } from "../libs/redis";
+import { verifySocketToken, getTokenFromSocket } from "./auth";
 
 const redisClient = getRedis();
 const MAP_PRESENCE_KEY = (mapId: string) => `map:${mapId}:presence`;
 
-export const setupPresenceSocket = (io: Server) => {
-  io.on("connection", (socket: Socket) => {
-    console.log(`User connected to presence socket: ${socket.id}`);
+export const setupPresenceSocket = async (io: Server, socket: Socket) => {
+  try {
+    // Add authentication like in chatSocket
+    const token = getTokenFromSocket(socket) || (socket.handshake.auth && (socket.handshake.auth as any).token);
+    const user = await verifySocketToken(token);
+    
+    console.log(`User connected to presence socket: ${socket.id}, userId: ${user._id}`);
 
     socket.on("join-map", async ({ userId, mapId, displayName }) => {
-      if (!userId || !mapId) return;
+      if (!userId || !mapId) return socket.emit("error", "userId and mapId are required");
+      
+      // Verify the userId matches the authenticated user
+      if (userId !== String(user._id)) {
+        return socket.emit("error", "Unauthorized: userId mismatch");
+      }
+
       socket.join(mapId);
 
-      const userData = { userId, displayName, x: 0, y: 0, ts: Date.now() };
+      const userData = { userId, displayName: displayName || user.username, x: 0, y: 0, ts: Date.now() };
 
       if (redisClient) {
         try {
@@ -28,7 +39,12 @@ export const setupPresenceSocket = (io: Server) => {
     });
 
     socket.on("move", async ({ userId, mapId, x, y }) => {
-      if (!userId || !mapId) return;
+      if (!userId || !mapId) return socket.emit("error", "userId and mapId are required");
+      
+      // Verify the userId matches the authenticated user
+      if (userId !== String(user._id)) {
+        return socket.emit("error", "Unauthorized: userId mismatch");
+      }
 
       const updatedData = { userId, x, y, ts: Date.now() };
       const key = MAP_PRESENCE_KEY(mapId);
@@ -45,7 +61,13 @@ export const setupPresenceSocket = (io: Server) => {
     });
 
     socket.on("leave-map", async ({ userId, mapId }) => {
-      if (!userId || !mapId) return;
+      if (!userId || !mapId) return socket.emit("error", "userId and mapId are required");
+      
+      // Verify the userId matches the authenticated user
+      if (userId !== String(user._id)) {
+        return socket.emit("error", "Unauthorized: userId mismatch");
+      }
+
       const key = MAP_PRESENCE_KEY(mapId);
 
       if (redisClient) {
@@ -61,7 +83,11 @@ export const setupPresenceSocket = (io: Server) => {
     });
 
     socket.on("disconnect", () => {
-      console.log(`User disconnected: ${socket.id}`);
+      console.log(`Presence user disconnected: ${socket.id}, userId: ${user._id}`);
     });
-  });
+  } catch (err: any) {
+    console.error("Presence socket authentication error:", err);
+    socket.emit("unauthorized", err.message);
+    socket.disconnect(true);
+  }
 };

@@ -90,6 +90,10 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
     res.status(201).json({ message: "File uploaded successfully", file });
   } catch (err) {
     console.error(err);
+    // Delete local file if it exists
+  if (req.file?.path && fs.existsSync(req.file.path)) {
+    fs.unlinkSync(req.file.path);
+  }
     res.status(500).json({ message: "File upload failed" });
   }
 };
@@ -175,6 +179,10 @@ export const getAllUserWorkspaceFiles = async (req: Request, res: Response): Pro
   try {
     const userId = req.user?._id;
 
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
     const workspaces = await Workspace.find({ members: userId }).select("_id name");
     if (!workspaces.length) {
       res.status(200).json({ message: "No workspaces joined yet", files: [] });
@@ -183,14 +191,22 @@ export const getAllUserWorkspaceFiles = async (req: Request, res: Response): Pro
 
     const workspaceIds = workspaces.map((ws) => ws._id);
 
-    const files = await FileModel.find({ workspace: { $in: workspaceIds } })
-      .populate("workspace", "workspaceName")
-      .populate("uploadedBy", "fullName email")
-      .sort({ createdAt: -1 });
+    const [files, total] = await Promise.all([
+      FileModel.find({ workspace: { $in: workspaceIds } })
+        .populate("workspace", "workspaceName")
+        .populate("uploadedBy", "fullName email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      FileModel.countDocuments({ workspace: { $in: workspaceIds } })
+    ]);
 
     res.status(200).json({
-      message: "Fetched all files from joined workspaces",
-      total: files.length,
+      message: "Fetched paginated files",
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
       files,
     });
   } catch (err) {
