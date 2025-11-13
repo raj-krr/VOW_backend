@@ -4,9 +4,21 @@ import Message from "../models/message";
 export const sendMessageRest = async (req: Request, res: Response) => {
   try {
     const { channelId, content, attachments } = req.body;
+    if(attachments.length === 0 && (!content || content.trim() === "")){
+      return  res.status(400).json({ error: "Message content or attachments are required" });}
     const sender = (req as any).user?._id || req.body.sender;
     const message = await Message.create({ channelId, sender, content, attachments });
-    res.status(201).json(message);
+    const response: Record<string, unknown> = { message };
+    if(message.attachments && message.attachments.length > 0){
+
+      response['attachments'] = message.attachments;
+    }
+    if(message.content){
+      response['content'] = message.content;
+    }
+    response.channelId = message.channelId;
+    response['sender'] = message.sender;
+    res.status(201).json(response);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

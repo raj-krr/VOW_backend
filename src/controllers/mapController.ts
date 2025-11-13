@@ -58,33 +58,7 @@ export const getBaseMap = async (_req: Request, res: Response) => {
   }
 };
 
-/**
- * Update map rooms/objects dynamically
- * Useful for admin panel or design updates
- */
-export const updateMapLayout = async (req: Request, res: Response) => {
-  try {
-    const { rooms, objects, metadata } = req.body;
-    const map = await Map.findOne();
-    if (!map)
-      return res.status(404).json({ success: false, msg: "Base map not found" });
 
-    if (rooms) map.rooms = rooms;
-    if (objects) map.objects = objects;
-    if (metadata) map.metadata = metadata;
-
-    await map.save();
-    return res.json({ success: true, map });
-  } catch (err) {
-    console.error("updateMapLayout error:", err);
-    return res.status(500).json({ success: false, msg: "Server error" });
-  }
-};
-
-/**
- * Store or update presence in Redis for a specific workspace
- * Expects: { userId, x, y, roomId, avatarUrl?, name? }
- */
 export const updatePresence = async (req: Request, res: Response) => {
   try {
     const { workspaceId } = req.params;
