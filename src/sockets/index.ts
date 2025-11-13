@@ -19,6 +19,7 @@ export const initSocket = (server: HttpServer) => {
     ],
       credentials: true,
     },
+    transports: ["websocket", "polling"],
   });
 
   chatSocket(io);
