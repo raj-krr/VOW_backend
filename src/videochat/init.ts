@@ -18,15 +18,62 @@ export function createVideoChatRouter(sfu: SFUServer) {
       const { roomId, name } = req.body || {};
 
       if (roomId) {
-        const room = await sfu.getRoom(roomId);
+        const room = await sfu.getRoom(String(roomId));
         if (!room) {
+          logger.warn(`[videochat] start: provided roomId ${roomId} not found`);
           return res.status(404).json({ error: "Room not found" });
         }
-        return res.json({ roomId });
+        return res.json({ roomId: String(roomId) });
       }
 
-      const roomName = typeof name === "string" && name.trim().length > 0 ? name.trim() : `call-${Date.now()}`;
-      const newRoomId = await sfu.createRoom(roomName);
+      const roomName =
+        typeof name === "string" && name.trim().length > 0
+          ? name.trim()
+          : `call-${Date.now()}`;
+
+      const created = await sfu.createRoom(roomName);
+
+      let newRoomId: string | undefined;
+      if (!created) {
+        logger.error("[videochat] createRoom returned falsy value");
+        return res.status(500).json({ error: "Failed to create room" });
+      } else if (typeof created === "string") {
+        newRoomId = created;
+      } else if (typeof created === "object") {
+        newRoomId = (created as any).id ?? (created as any).roomId ?? (created as any).room?.id;
+      }
+
+      newRoomId = newRoomId ? String(newRoomId) : undefined;
+
+      if (!newRoomId) {
+        logger.warn("[videochat] createRoom did not return an id; attempting to derive it");
+      }
+
+      const room = newRoomId ? await sfu.getRoom(newRoomId) : undefined;
+
+      if (!room) {
+        logger.warn(`[videochat] room ${newRoomId ?? "<unknown>"} not found immediately after create — retrying once`);
+        if (newRoomId) {
+          await new Promise((r) => setTimeout(r, 50)); 
+          const roomRetry = await sfu.getRoom(newRoomId);
+          if (roomRetry) {
+            return res.json({ roomId: newRoomId });
+          }
+        }
+
+        if (created && typeof created === "object") {
+          const guessId = (created as any).id ?? (created as any).roomId;
+          if (guessId) {
+            logger.info(`[videochat] returning guessed id ${guessId} even though getRoom couldn't find it`);
+            return res.json({ roomId: String(guessId) });
+          }
+        }
+
+        logger.error("[videochat] created room but could not find it with getRoom");
+        return res.status(500).json({ error: "Room created but not available yet" });
+      }
+
+      // success
       return res.json({ roomId: newRoomId });
     } catch (err: any) {
       logger.error("Error starting call:", err);
@@ -41,8 +88,9 @@ export function createVideoChatRouter(sfu: SFUServer) {
         return res.status(400).json({ error: "roomId is required to join" });
       }
 
-      const room = await sfu.getRoom(roomId);
+      const room = await sfu.getRoom(String(roomId));
       if (!room) {
+        logger.warn(`[videochat] join: attempted to join missing room ${roomId}`);
         return res.status(404).json({ error: "Room not found" });
       }
 
