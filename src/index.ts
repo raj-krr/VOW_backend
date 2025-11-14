@@ -17,7 +17,7 @@ import UserModel from "./models/user";
 import cookieParser from "cookie-parser";
 import meRouter from "./routes/meRoutes";
 import fileRouter from "./routes/fileRoutes";
-import { ipLimiter } from "./middlewares/rateLimit";
+// import { ipLimiter } from "./middlewares/rateLimit";
 import http from "http";
 import { initSocket } from "./sockets";
 import workspaceRouter from "./routes/workspaceRoute";
@@ -103,7 +103,7 @@ if (Object.keys(mergedDoc).length > 0) {
 }
 
 // API routes
-app.use(ipLimiter);
+// app.use(ipLimiter);
 app.use("/auth", AuthRoutes);
 app.use("/", healthRoutes);
 app.use("/me", meRouter);
