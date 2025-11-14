@@ -5,7 +5,7 @@ import { generateInviteCode } from "../utils/otp";
 import { sendInviteEmail } from "../middlewares/email";
 import { ObjectId, Types } from "mongoose";
 import { ApiError } from "../utils/ApiError";
-import { generateWorkspaceToken } from "../middlewares/workspace.middleware";
+import { generateWorkspaceToken, workspaceCookieOptions } from "../middlewares/workspace.middleware";
 import { options}  from "../constant"
 
 export const createWorkspace = async (req: Request, res: Response) : Promise<void> => {
@@ -30,7 +30,7 @@ await workspace.save();
     const workspaceToken = generateWorkspaceToken(workspaceIdStr, userID.toString());
 
     const cookieName = `workspaceToken_${workspaceIdStr}`;
-    res.cookie(cookieName, workspaceToken,options );
+    res.cookie(cookieName, workspaceToken, workspaceCookieOptions );
       
 
     res.status(200).json({
