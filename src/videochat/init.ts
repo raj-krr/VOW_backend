@@ -1,28 +1,35 @@
-// src/videochat/init.ts
-import { Application, Router } from "express";
+import { Application } from "express";
 import { Server as HttpServer } from "http";
 import { SFUServer } from "./server/sfu";
-import { WebSocketSignalingServer } from "./server/websocket";
-import logger from "./utils/logger"; // adjust if your logger path differs
+import logger from "./utils/logger";
+import { createVideoChatRouter, attachSignalingServer } from "./server/index";
+
 
 export async function initVideoChat(app: Application, server: HttpServer) {
   const sfu = new SFUServer(process.env.REDIS_URL);
   await sfu.initialize();
 
-  // mount existing routes under /videochat
-  const router = Router();
-  router.get('/health', (req,res)=>res.json({ ok:true }));
-  app.use('/videochat', router);
+  const vcRouter = createVideoChatRouter(sfu);
+  app.use("/videochat", vcRouter);
 
-  // attach signaling websocket on same HTTP server
-  const wss = new WebSocketSignalingServer(server, sfu, '/signaling');
+  const { wss, shutdown } = attachSignalingServer(server, sfu, "/signaling");
+
+  logger.info("Videochat initialized: REST mounted at /videochat, signaling at /signaling");
 
   return {
     sfu,
     wss,
     shutdown: async () => {
-      try { wss.shutdown(); } catch(e){ logger.warn(String(e)); }
-      try { await sfu.shutdown(); } catch(e){ logger.warn(String(e)); }
-    }
+      try {
+        shutdown && shutdown();
+      } catch (e) {
+        logger.warn("Error shutting down signaling:", e);
+      }
+      try {
+        await sfu.shutdown();
+      } catch (e) {
+        logger.warn("Error shutting down sfu:", e);
+      }
+    },
   };
 }
