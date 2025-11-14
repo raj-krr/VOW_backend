@@ -346,7 +346,7 @@ const refreshAccessToken = async (req: Request, res: Response) => {
     // Validate refresh token signature
     let decoded: any;
     try {
-      decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET!);
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!);
     } catch (err) {
       return res.status(401).json({ success: false, msg: "Invalid or expired refresh token" });
     }
