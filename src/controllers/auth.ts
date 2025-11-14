@@ -332,4 +332,47 @@ const logout = async (req: Request, res: Response) => {
   }
 };
 
-export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword, logout };
+const refreshAccessToken = async (req: Request, res: Response) => {
+  try {
+    // Get refresh token from cookie or header
+    const refreshToken =
+      req.cookies?.refreshToken ||
+      (req.headers["x-refresh-token"] as string);
+
+    if (!refreshToken) {
+      return res.status(401).json({ success: false, msg: "Refresh token missing" });
+    }
+
+    // Validate refresh token signature
+    let decoded: any;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET!);
+    } catch (err) {
+      return res.status(401).json({ success: false, msg: "Invalid or expired refresh token" });
+    }
+
+    // Validate token in DB
+    const user = await UserModel.findOne({ _id: decoded._id, refreshToken });
+
+    if (!user) {
+      return res.status(403).json({ success: false, msg: "Token mismatch — login again" });
+    }
+
+    // Rotate tokens (best practice)
+    const { accessToken, refreshToken: newRefreshToken } = user.generateTokens();
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    return res
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken,options)
+      .json({ success: true, msg: "Token refreshed" });
+  } catch (err) {
+    console.error("refreshAccessToken error:", err);
+    return res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+
+
+export { register, verifyEmail, resendVerification, login, forgotPassword, verifyResetOtp, updatePassword, logout ,refreshAccessToken};
