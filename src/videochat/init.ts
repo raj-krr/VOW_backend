@@ -87,29 +87,53 @@ export function createVideoChatRouter(sfu: SFUServer) {
     }
   });
 
-  router.post("/join", async (req: Request, res: Response) => {
-    try {
-      const { roomId } = req.body || {};
-      logger.info(`[videochat] join request for roomId: ${String(roomId)}`);
-      logger.info(`[videochat] rooms-known at join time: ${JSON.stringify(sfu.listRooms())}`);
+ router.post("/join", async (req: Request, res: Response) => {
+  try {
+    logger.info(`[videochat] join request headers: ${JSON.stringify({
+      'content-type': req.get('content-type'),
+      'content-length': req.get('content-length'),
+      host: req.get('host')
+    })}`);
 
-      if (!roomId || typeof roomId !== "string") {
-        return res.status(400).json({ error: "roomId is required to join" });
+    let body: any = req.body;
+    if (typeof body === 'string') {
+      const trimmed = body.trim();
+      if (!trimmed) {
+        logger.warn('[videochat] join: req.body is empty string');
+        return res.status(400).json({ success: false, msg: 'Empty JSON body' });
       }
-
-      const room = await sfu.getRoom(String(roomId));
-      if (!room) {
-        logger.warn(`[videochat] join: attempted to join missing room ${roomId}`);
-        return res.status(404).json({ error: "Room not found" });
+      try {
+        body = JSON.parse(trimmed);
+      } catch (err: any) {
+        logger.error('[videochat] join: failed to JSON.parse(req.body) ->', err);
+        return res.status(400).json({ success: false, msg: 'Malformed JSON body', detail: String(err.message) });
       }
-
-      logger.info(`[videochat] join: room ${roomId} found; allowing join`);
-      return res.json({ success: true, roomId });
-    } catch (err: any) {
-      logger.error("Error joining call:", err);
-      return res.status(500).json({ error: err?.message ?? "unknown error" });
     }
-  });
+
+    logger.info(`[videochat] join body: ${JSON.stringify(body)}`);
+
+    const { roomId } = body || {};
+    if (!roomId || typeof roomId !== "string") {
+      logger.warn('[videochat] join: missing or invalid roomId in request body');
+      return res.status(400).json({ error: "roomId is required to join" });
+    }
+
+    logger.info(`[videochat] rooms-known at join time: ${JSON.stringify(sfu.listRooms())}`);
+
+    const room = await sfu.getRoom(String(roomId));
+    if (!room) {
+      logger.warn(`[videochat] join: attempted to join missing room ${roomId}`);
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    logger.info(`[videochat] join: room ${roomId} found; allowing join`);
+    return res.json({ success: true, roomId });
+  } catch (err: any) {
+    logger.error('Unexpected error in /videochat/join handler:', err);
+    return res.status(500).json({ success: false, msg: 'Internal error', detail: String(err?.message ?? err) });
+  }
+});
+
 
   return router;
 }
