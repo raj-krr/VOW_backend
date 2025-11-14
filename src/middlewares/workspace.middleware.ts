@@ -1,4 +1,4 @@
-import { Request,Response,NextFunction } from "express";
+import { Request,Response,NextFunction, CookieOptions } from "express";
 import { ApiError } from "../utils/ApiError";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
@@ -8,6 +8,16 @@ import jwt, { JwtPayload } from "jsonwebtoken";
     process.env.WORKSPACE_JWT_SECRET as string,
     { expiresIn: 60*30*60*24 }
   );
+};
+
+const isProduction = process.env.NODE_ENV === "production";
+
+export const workspaceCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? "none" : "lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: "/",
 };
 
 interface WorkspaceJwtPayload extends JwtPayload{
