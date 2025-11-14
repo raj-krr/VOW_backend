@@ -15,7 +15,7 @@ export async function initVideoChat(app: Application, server: HttpServer) {
   app.use('/videochat', router);
 
   // attach signaling websocket on same HTTP server
-  const wss = new WebSocketSignalingServer(server, sfu);
+  const wss = new WebSocketSignalingServer(server, sfu, '/signaling');
 
   return {
     sfu,
