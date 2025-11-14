@@ -1,3 +1,4 @@
+// src/videochat/server/sfu.ts
 import { RoomManager } from './room';
 import { ParticipantManager } from './participant';
 import { MediaRouter } from './mediaRouter';
@@ -31,6 +32,36 @@ export class SFUServer {
 
   async initialize() {
     await this.redisManager.connect();
+
+    try {
+      await this.redisManager.subscribe(REDIS_KEYS.SIGNALING_CHANNEL, (message: any) => {
+        try {
+          const { type, roomId, roomName } = message || {};
+          if (!type || !roomId) return;
+
+          if (type === 'room-created') {
+            if (!this.rooms.has(roomId)) {
+              logger.info(`[SFU:${process.pid}] redis event: room-created ${roomId}`);
+              const rm = new RoomManager(roomId, roomName ?? `call-${Date.now()}`);
+              this.rooms.set(roomId, rm);
+            }
+          } else if (type === 'room-deleted') {
+            if (this.rooms.has(roomId)) {
+              logger.info(`[SFU:${process.pid}] redis event: room-deleted ${roomId}`);
+              const r = this.rooms.get(roomId)!;
+              r.cleanup();
+              this.rooms.delete(roomId);
+              this.streamingManager.cleanup(roomId);
+            }
+          }
+        } catch (err) {
+          logger.error('Error in redis signaling handler:', err);
+        }
+      });
+    } catch (err) {
+      logger.warn('Failed to subscribe to redis signaling channel:', err);
+    }
+
     this.startHeartbeat();
     logger.info('SFU Server initialized');
   }
@@ -45,7 +76,6 @@ export class SFUServer {
           }
         });
 
-        // Clean up empty rooms
         if (room.isEmpty()) {
           this.deleteRoom(room.getId());
         }
@@ -53,7 +83,11 @@ export class SFUServer {
     }, LIMITS.HEARTBEAT_INTERVAL);
   }
 
-  createRoom(roomName: string): string {
+  public listRooms(): string[] {
+    return Array.from(this.rooms.keys());
+  }
+
+  async createRoom(roomName: string): Promise<string> {
     if (this.rooms.size >= LIMITS.MAX_ROOMS) {
       throw new Error('Maximum number of rooms reached');
     }
@@ -62,35 +96,59 @@ export class SFUServer {
     const room = new RoomManager(roomId, roomName);
     this.rooms.set(roomId, room);
 
-    // Publish room creation to Redis
-    this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL + roomId, {
-      type: 'room-created',
-      roomId,
-      roomName
-    });
+    try {
+      await this.redisManager.setRoomData(roomId, {
+        roomId,
+        roomName,
+        createdAt: Date.now()
+      });
+    } catch (err) {
+      logger.warn('Failed to set room data in redis (continuing): ' + String(err));
+    }
 
-    logger.info(`Room created: ${roomId} - ${roomName}`);
+    const payload = { type: 'room-created', roomId, roomName };
+    try {
+      await this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL + roomId, payload).catch(() => {});
+      await this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL, payload);
+    } catch (err) {
+      logger.warn('Failed to publish room-created event to redis: ' + String(err));
+    }
+
+    logger.info(`[SFU:${process.pid}] Room created: ${roomId} - ${roomName}`);
+    logger.debug(`[SFU:${process.pid}] Current rooms after create: ${JSON.stringify(this.listRooms())}`);
     return roomId;
   }
 
+
   getRoom(roomId: string): RoomManager | undefined {
-    return this.rooms.get(roomId);
+    const found = this.rooms.get(roomId);
+    logger.info(`[SFU:${process.pid}] getRoom(${roomId}) => ${found ? 'FOUND' : 'NOT FOUND'}`);
+    logger.debug(`[SFU:${process.pid}] Current rooms when getRoom called: ${JSON.stringify(this.listRooms())}`);
+    return found;
   }
 
-  deleteRoom(roomId: string) {
+  async deleteRoom(roomId: string) {
     const room = this.rooms.get(roomId);
     if (room) {
       room.cleanup();
       this.rooms.delete(roomId);
       this.streamingManager.cleanup(roomId);
       
-      // Publish room deletion to Redis
-      this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL + roomId, {
-        type: 'room-deleted',
-        roomId
-      });
+      try {
+        await this.redisManager.deleteRoomData(roomId);
+      } catch (err) {
+        logger.warn('Failed to delete room data from redis: ' + String(err));
+      }
 
-      logger.info(`Room deleted: ${roomId}`);
+      const payload = { type: 'room-deleted', roomId };
+      try {
+        await this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL + roomId, payload).catch(() => {});
+        await this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL, payload);
+      } catch (err) {
+        logger.warn('Failed to publish room-deleted event to redis: ' + String(err));
+      }
+
+      logger.info(`[SFU:${process.pid}] Room deleted: ${roomId}`);
     }
   }
 
@@ -126,10 +184,8 @@ export class SFUServer {
     const manager = new ParticipantManager(participant, socket);
     room.addParticipant(manager);
 
-    // Send chat history to new participant
     this.chatManager.sendChatHistory(roomId, participantId);
 
-    // Notify other participants
     const joinMessage = Protocol.createMessage(
       SignalingMessageType.PARTICIPANT_JOINED,
       roomId,
@@ -138,15 +194,14 @@ export class SFUServer {
     );
     room.broadcastMessage(joinMessage, participantId);
 
-    // Publish to Redis
     this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL + roomId, {
       type: 'participant-joined',
       roomId,
       participantId,
       participantName
-    });
+    }).catch(() => {});
 
-    logger.info(`Participant ${participantName} (${participantId}) joined room ${roomId}`);
+    logger.info(`[SFU:${process.pid}] Participant ${participantName} (${participantId}) joined room ${roomId}`);
 
     return {
       participantId,
@@ -161,14 +216,11 @@ export class SFUServer {
     const participant = room.getParticipant(participantId);
     if (!participant) return;
 
-    // Clean up bandwidth monitoring
     this.bandwidthMonitor.removeParticipant(participantId);
     this.mediaRouter.clearBuffer(participantId);
 
-    // Remove participant
     room.removeParticipant(participantId);
 
-    // Notify other participants
     const leaveMessage = Protocol.createMessage(
       SignalingMessageType.PARTICIPANT_LEFT,
       roomId,
@@ -176,16 +228,14 @@ export class SFUServer {
     );
     room.broadcastMessage(leaveMessage);
 
-    // Publish to Redis
     this.redisManager.publish(REDIS_KEYS.SIGNALING_CHANNEL + roomId, {
       type: 'participant-left',
       roomId,
       participantId
-    });
+    }).catch(() => {});
 
-    logger.info(`Participant ${participantId} left room ${roomId}`);
+    logger.info(`[SFU:${process.pid}] Participant ${participantId} left room ${roomId}`);
 
-    // Delete room if empty
     if (room.isEmpty()) {
       this.deleteRoom(roomId);
     }
@@ -217,10 +267,8 @@ export class SFUServer {
       });
     }
 
-    // Route the media chunk
     this.mediaRouter.routeMediaChunk(room, participantId, chunkData);
 
-    // If livestreaming, send to stream
     if (room.isLivestreaming()) {
       this.streamingManager.handleStreamData(roomId, chunkData);
     }
@@ -235,7 +283,6 @@ export class SFUServer {
 
     participant.setPublishing(true);
 
-    // Notify other participants
     room.broadcastMessage({
       type: 'participant-started-publishing',
       roomId,

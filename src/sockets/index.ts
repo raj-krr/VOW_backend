@@ -33,7 +33,6 @@ export const initSocket = (server: HttpServer) => {
     chatSocket(io, socket);
     setupPresenceSocket(io, socket);
 
-    // ✅ CORRECT: disconnect event on socket, not io
     socket.on("disconnect", (reason) => {
       console.log("Socket user disconnected:", socket.id, "Reason:", reason);
     });

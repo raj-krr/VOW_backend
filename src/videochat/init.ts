@@ -21,8 +21,11 @@ export function createVideoChatRouter(sfu: SFUServer) {
         const room = await sfu.getRoom(String(roomId));
         if (!room) {
           logger.warn(`[videochat] start: provided roomId ${roomId} not found`);
+          logger.info(`[videochat] rooms-known: ${JSON.stringify(sfu.listRooms())}`);
           return res.status(404).json({ error: "Room not found" });
         }
+        logger.info(`[videochat] start: validated provided roomId ${roomId}`);
+        logger.info(`[videochat] rooms-known: ${JSON.stringify(sfu.listRooms())}`);
         return res.json({ roomId: String(roomId) });
       }
 
@@ -70,10 +73,13 @@ export function createVideoChatRouter(sfu: SFUServer) {
         }
 
         logger.error("[videochat] created room but could not find it with getRoom");
+        logger.info(`[videochat] rooms-known after create attempt: ${JSON.stringify(sfu.listRooms())}`);
         return res.status(500).json({ error: "Room created but not available yet" });
       }
 
       // success
+      logger.info(`[videochat] start: created new room ${newRoomId}`);
+      logger.info(`[videochat] rooms-known after create: ${JSON.stringify(sfu.listRooms())}`);
       return res.json({ roomId: newRoomId });
     } catch (err: any) {
       logger.error("Error starting call:", err);
@@ -84,6 +90,9 @@ export function createVideoChatRouter(sfu: SFUServer) {
   router.post("/join", async (req: Request, res: Response) => {
     try {
       const { roomId } = req.body || {};
+      logger.info(`[videochat] join request for roomId: ${String(roomId)}`);
+      logger.info(`[videochat] rooms-known at join time: ${JSON.stringify(sfu.listRooms())}`);
+
       if (!roomId || typeof roomId !== "string") {
         return res.status(400).json({ error: "roomId is required to join" });
       }
@@ -94,6 +103,7 @@ export function createVideoChatRouter(sfu: SFUServer) {
         return res.status(404).json({ error: "Room not found" });
       }
 
+      logger.info(`[videochat] join: room ${roomId} found; allowing join`);
       return res.json({ success: true, roomId });
     } catch (err: any) {
       logger.error("Error joining call:", err);
