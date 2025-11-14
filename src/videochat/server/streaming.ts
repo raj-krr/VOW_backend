@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class StreamingManager {
   private rooms: Map<string, RoomManager>;
   private mediaRouter: MediaRouter;
-  private activeStreams: Map<string, string> = new Map(); // roomId -> streamKey
+  private activeStreams: Map<string, string> = new Map();
   private streamBuffers: Map<string, Buffer[]> = new Map();
 
   constructor(rooms: Map<string, RoomManager>, mediaRouter: MediaRouter) {
