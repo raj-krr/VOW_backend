@@ -3,11 +3,11 @@ import { getRedis } from "../libs/redis";
 import { verifySocketToken, getTokenFromSocket } from "./auth";
 
 const redisClient = getRedis();
-const MAP_PRESENCE_KEY = (mapId: string) => `map:${mapId}:presence`;
+const PRESENCE_KEY = "presence:users"; 
 
 export const setupPresenceSocket = async (io: Server, socket: Socket) => {
   try {
-    
+   
     let cookieToken: string | undefined = undefined;
 
     const rawCookie = socket.handshake.headers.cookie;
@@ -15,34 +15,25 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
       const cookies = Object.fromEntries(
         rawCookie.split(";").map((c) => c.trim().split("="))
       );
-      cookieToken = cookies.accessToken; 
+      cookieToken = cookies.accessToken;
     }
-
 
     const headerToken = getTokenFromSocket(socket);
     const authToken = socket.handshake.auth?.token;
 
     const token = cookieToken || headerToken || authToken;
 
-    if (!token) {
-      throw new Error("No authentication token provided");
-    }
+    if (!token) throw new Error("No authentication token provided");
 
     const user = await verifySocketToken(token);
 
-    console.log(
-      `User connected to presence socket: ${socket.id}, userId: ${user._id}`
-    );
+    console.log(`Presence connected: socket=${socket.id}, userId=${user._id}`);
 
-    socket.on("join-map", async ({ userId, mapId, displayName }) => {
-      if (!userId || !mapId)
-        return socket.emit("error", "userId and mapId are required");
+    socket.on("join", async ({ userId, displayName }) => {
+      if (!userId) return socket.emit("error", "userId is required");
 
-      if (userId !== String(user._id)) {
-        return socket.emit("error", "Unauthorized: userId mismatch");
-      }
-
-      socket.join(mapId);
+      if (userId !== String(user._id))
+        return socket.emit("error", "Unauthorized userId mismatch");
 
       const userData = {
         userId,
@@ -53,69 +44,59 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
       };
 
       if (redisClient) {
-        try {
-          await redisClient.hset(
-            MAP_PRESENCE_KEY(mapId),
-            userId,
-            JSON.stringify(userData)
-          );
-        } catch (err) {
-          console.error("Redis error (join-map):", err);
-        }
+        await redisClient.hset(
+          PRESENCE_KEY,
+          userId,
+          JSON.stringify(userData)
+        );
       }
 
-      io.to(mapId).emit("user-joined", userData);
+      io.emit("user-joined", userData); 
     });
 
-    socket.on("move", async ({ userId, mapId, x, y }) => {
-      if (!userId || !mapId)
-        return socket.emit("error", "userId and mapId are required");
+
+    socket.on("move", async ({ userId, x, y }) => {
+      if (!userId) return;
 
       if (userId !== String(user._id))
-        return socket.emit("error", "Unauthorized: userId mismatch");
+        return socket.emit("error", "Unauthorized userId mismatch");
 
       const updatedData = { userId, x, y, ts: Date.now() };
-      const key = MAP_PRESENCE_KEY(mapId);
 
       if (redisClient) {
-        try {
-          await redisClient.hset(key, userId, JSON.stringify(updatedData));
-        } catch (err) {
-          console.error("Redis error (move):", err);
-        }
+        await redisClient.hset(
+          PRESENCE_KEY,
+          userId,
+          JSON.stringify(updatedData)
+        );
       }
 
-      io.to(mapId).emit("user-moved", updatedData);
+      io.emit("user-moved", updatedData); 
     });
 
-    socket.on("leave-map", async ({ userId, mapId }) => {
-      if (!userId || !mapId)
-        return socket.emit("error", "userId and mapId are required");
+
+    socket.on("leave", async ({ userId }) => {
+      if (!userId) return;
 
       if (userId !== String(user._id))
-        return socket.emit("error", "Unauthorized: userId mismatch");
-
-      const key = MAP_PRESENCE_KEY(mapId);
+        return socket.emit("error", "Unauthorized userId mismatch");
 
       if (redisClient) {
-        try {
-          await redisClient.hdel(key, userId);
-        } catch (err) {
-          console.error("Redis error (leave-map):", err);
-        }
+        await redisClient.hdel(PRESENCE_KEY, userId);
       }
 
-      io.to(mapId).emit("user-left", { userId });
-      socket.leave(mapId);
+      io.emit("user-left", { userId });
     });
 
-    socket.on("disconnect", () => {
-      console.log(
-        `Presence user disconnected: ${socket.id}, userId: ${user._id}`
-      );
+
+    
+    socket.on("disconnect", async () => {
+      console.log(`Presence disconnected: ${socket.id}`);
+
     });
+
   } catch (err: any) {
-    console.error("Presence socket authentication error:", err);
+    console.error("Presence socket auth error:", err.message);
     socket.emit("unauthorized", err.message);
     socket.disconnect(true);
   }
