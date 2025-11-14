@@ -1,5 +1,7 @@
+// src/index.ts
 import dotenv from "dotenv";
 dotenv.config();
+
 import fs from "fs";
 import express, { Application, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
@@ -29,14 +31,11 @@ import mapRoutes from "./routes/mapRoutes";
 import roomRoutes from "./routes/roomRoutes";
 import meetingRoutes from "./routes/meetingRoutes";
 import dmRouter from "./routes/directMessageRoutes";
-import { initVideoChat } from "./videochat/init";
-
+import { initVideoChat } from "./videochat/init"; // <-- videochat import (named)
 
 const app: Application = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(express.json());
 
 app.use(
   cors({
@@ -48,7 +47,6 @@ app.use(
       process.env.FRONTEND_URL_PROD as string,
       process.env.FRONTEND_URL_DEV as string,
     ],
-
     credentials: true,
   })
 );
@@ -141,7 +139,6 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Start server after DB connects
 const PORT = process.env.PORT || 8000;
 mongoDb()
   .then(async () => {
@@ -151,6 +148,7 @@ mongoDb()
 
     let videochatHandle: { shutdown?: () => Promise<void> } | undefined;
     try {
+
       videochatHandle = await initVideoChat(app, server);
       console.log("Videochat mounted at /videochat and /signaling");
     } catch (err) {
