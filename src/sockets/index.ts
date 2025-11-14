@@ -11,7 +11,7 @@ export const initSocket = (server: HttpServer) => {
       process.env.FRONTEND_URL as string,
       "https://vow-org.me", 
       "http://localhost:5173",
-      "http://127.0.0.1:3000",
+      "http://127.0.0.1:8000",
       "https://vow-live.me",
       process.env.RENDER_URL as string,
       process.env.FRONTEND_URL_PROD as string,

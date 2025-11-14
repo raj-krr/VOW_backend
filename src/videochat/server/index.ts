@@ -90,7 +90,7 @@ app.get('/health', (req, res) => {
 res.json({ status: 'ok', timestamp: Date.now() });
 });
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 async function startServer() {
 try {
 // Initialize SFU
