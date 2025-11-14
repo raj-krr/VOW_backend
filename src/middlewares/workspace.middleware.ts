@@ -6,7 +6,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
   return jwt.sign(
     { workspaceId, userId },
     process.env.WORKSPACE_JWT_SECRET as string,
-    { expiresIn: "30d" }
+    { expiresIn: 60*30*60*24 }
   );
 };
 
