@@ -1,129 +1,127 @@
-import express from 'express';
-import { createServer } from 'http';
-import cors from 'cors';
-import { SFUServer } from './sfu';
-import { WebSocketSignalingServer } from './websocket';
-import logger from '../utils/logger';
+import { Router, Request, Response } from "express";
+import { Server as HttpServer } from "http";
+import { SFUServer } from "./sfu";
+import { WebSocketSignalingServer } from "./websocket";
+import logger from "../utils/logger";
 
-const app = express();
-const server = createServer(app);
+type VideoChatShutdownHandle = {
+  wss?: WebSocketSignalingServer;
+  shutdown?: () => void;
+};
 
-// Middleware
-app.use(cors());
-app.use(express.json());
 
-// Initialize SFU Server
-const sfuServer = new SFUServer(process.env.REDIS_URL);
+export function createVideoChatRouter(sfu: SFUServer) {
+  const router = Router();
 
-// Initialize WebSocket Server
-let wsServer: WebSocketSignalingServer;
+  // Create room
+  router.post("/api/rooms", async (req: Request, res: Response) => {
+    try {
+      const { name } = req.body;
+      if (!name || typeof name !== "string") {
+        return res.status(400).json({ error: "Room name is required" });
+      }
 
-// REST API Routes
-app.post('/api/rooms', (req, res) => {
-  try {
-    const { name } = req.body;
-    
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({ error: 'Room name is required' });
+      const roomId = await sfu.createRoom(name);
+      return res.json({ roomId, name });
+    } catch (err: any) {
+      logger.error("Error creating room:", err);
+      return res.status(500).json({ error: err?.message ?? "unknown error" });
     }
+  });
 
-    const roomId = sfuServer.createRoom(name);
-    res.json({ roomId, name });
-  } catch (error: any) {
-    logger.error('Error creating room:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  // Get room info
+  router.get("/api/rooms/:roomId", async (req: Request, res: Response) => {
+    try {
+      const { roomId } = req.params;
+      const room = await sfu.getRoom(roomId);
+      if (!room) return res.status(404).json({ error: "Room not found" });
 
-app.get('/api/rooms/:roomId', (req, res) => {
-  try {
-    const { roomId } = req.params;
-    const room = sfuServer.getRoom(roomId);
-
-    if (!room) {
-      return res.status(404).json({ error: 'Room not found' });
+      return res.json(room.getRoomState());
+    } catch (err: any) {
+      logger.error("Error getting room:", err);
+      return res.status(500).json({ error: err?.message ?? "unknown error" });
     }
+  });
 
-    res.json(room.getRoomState());
-  } catch (error: any) {
-    logger.error('Error getting room:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  // Delete room
+  router.delete("/api/rooms/:roomId", async (req: Request, res: Response) => {
+    try {
+      const { roomId } = req.params;
+      await sfu.deleteRoom(roomId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      logger.error("Error deleting room:", err);
+      return res.status(500).json({ error: err?.message ?? "unknown error" });
+    }
+  });
 
-app.delete('/api/rooms/:roomId', (req, res) => {
+  // SFU stats
+  router.get("/api/stats", async (_req: Request, res: Response) => {
+    try {
+      const stats = await sfu.getStats();
+      return res.json(stats);
+    } catch (err: any) {
+      logger.error("Error getting stats:", err);
+      return res.status(500).json({ error: err?.message ?? "unknown error" });
+    }
+  });
+
+  // Chat history for a room
+  router.get("/api/rooms/:roomId/chat", async (req: Request, res: Response) => {
+    try {
+      const { roomId } = req.params;
+      const room = await sfu.getRoom(roomId);
+      if (!room) return res.status(404).json({ error: "Room not found" });
+
+      const messages = room.getChatHistory ? room.getChatHistory() : [];
+      return res.json({ messages });
+    } catch (err: any) {
+      logger.error("Error getting chat history:", err);
+      return res.status(500).json({ error: err?.message ?? "unknown error" });
+    }
+  });
+
+  router.get("/health", (_req: Request, res: Response) => {
+    return res.json({ status: "ok", timestamp: Date.now() });
+  });
+
+  return router;
+}
+
+export function attachSignalingServer(
+  httpServer: HttpServer,
+  sfu: SFUServer,
+  path = "/signaling"
+): VideoChatShutdownHandle {
+  logger.info(`[videochat] attaching signaling server on path ${path}`);
+
+  const wss = new WebSocketSignalingServer(httpServer, sfu, path);
+
   try {
-    const { roomId } = req.params;
-    sfuServer.deleteRoom(roomId);
-    res.json({ success: true });
-  } catch (error: any) {
-    logger.error('Error deleting room:', error);
-    res.status(500).json({ error: error.message });
+    if (typeof (wss as any).on === "function") {
+      (wss as any).on("listening", () => {
+        logger.info("[videochat] signaling WebSocket server is listening");
+      });
+
+      (wss as any).on("error", (err: Error) => {
+        logger.error("[videochat] signaling WebSocket server error:", err);
+      });
+    } else {
+      throw new Error("no event listeners available");
+    }
+  } catch (e) {
+    logger.warn("[videochat] signaling WebSocket server does not support event listeners");
   }
-});
 
-app.get('/api/stats', (req, res) => {
-  try {
-    const stats = sfuServer.getStats();
-    res.json(stats);
-  } catch (error: any) {
-    logger.error('Error getting stats:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  const shutdown = () => {
+    try {
+      if (wss && typeof (wss as any).shutdown === "function") {
+        (wss as any).shutdown();
+      }
+    } catch (err: any) {
+      logger.error("Error during signaling shutdown:", err);
+    }
+  };
 
-app.get('/api/rooms/:roomId/chat', (req, res) => {
-try {
-const { roomId } = req.params;
-const room = sfuServer.getRoom(roomId);
-if (!room) {
-  return res.status(404).json({ error: 'Room not found' });
+  return { wss, shutdown };
 }
-
-res.json({ messages: room.getChatHistory() });
-} catch (error: any) {
-logger.error('Error getting chat history:', error);
-res.status(500).json({ error: error.message });
-}
-});
-app.get('/health', (req, res) => {
-res.json({ status: 'ok', timestamp: Date.now() });
-});
-// Start server
-const PORT = process.env.PORT || 8000;
-async function startServer() {
-try {
-// Initialize SFU
-await sfuServer.initialize();
-wsServer = new WebSocketSignalingServer(server, sfuServer);
-
-server.listen(PORT, () => {
-  logger.info(`SFU Server running on port ${PORT}`);
-  logger.info(`WebSocket signaling available at ws://localhost:${PORT}/signaling`);
-});
-} catch (error) {
-logger.error('Failed to start server:', error);
-process.exit(1);
-}
-}
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-logger.info('SIGTERM received, shutting down gracefully');
-wsServer.shutdown();
-await sfuServer.shutdown();
-server.close(() => {
-logger.info('Server closed');
-process.exit(0);
-});
-});
-process.on('SIGINT', async () => {
-logger.info('SIGINT received, shutting down gracefully');
-wsServer.shutdown();
-await sfuServer.shutdown();
-server.close(() => {
-logger.info('Server closed');
-process.exit(0);
-});
-});
-startServer();
-export { app, server, sfuServer, wsServer };
