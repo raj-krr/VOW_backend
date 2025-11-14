@@ -26,15 +26,18 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Docker image
+      - name: Build & Push Docker Image
         run: |
-          IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/vow-backend
-          TAG=latest
-          echo "Building Docker image: $IMAGE_NAME:$TAG"
-          docker image prune -f
-          docker build -t $IMAGE_NAME:$TAG .
-          docker push $IMAGE_NAME:$TAG
-          echo "Image pushed successfully."
+          IMAGE=${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
+
+          echo "Cleaning previous builder cache..."
+          docker builder prune -a -f || true
+
+          echo "Building image: $IMAGE"
+          docker build -t $IMAGE .
+
+          echo "Pushing image..."
+          docker push $IMAGE
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.1.0
@@ -44,10 +47,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            echo "=== Starting deployment at $(date) ==="
+            echo "=== Deployment started @ $(date) ==="
 
-            # Ensure Docker Compose plugin exists
-            if ! docker compose version > /dev/null 2>&1; then
+            # Ensure Docker Compose exists
+            if ! docker compose version >/dev/null 2>&1; then
               echo "Installing Docker Compose plugin..."
               DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
               mkdir -p $DOCKER_CONFIG/cli-plugins
@@ -56,21 +59,22 @@ jobs:
               chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
             fi
 
-            echo "Pulling new image..."
-             docker pull ${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
+            echo "Pulling new backend image..."
+            docker pull ${{ secrets.DOCKER_USERNAME }}/vow-backend:latest
 
-            echo "Stopping old container (if exists)..."
-             docker stop vow-auth || true
-             docker rm vow-auth || true
+            echo "Stopping and removing old containers..."
+            docker compose down || true
+            docker stop vow-backend || true
+            docker rm vow-backend || true
 
-            echo "Fetching latest docker-compose.yml..."
+            echo "Cleaning unused Docker images and containers..."
+            docker system prune -a -f --volumes || true
+
+            echo "Downloading latest docker-compose.yml..."
             rm -f docker-compose.yml
             curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
 
-            echo "Stopping old services..."
-             docker compose down || true
+            echo "Starting updated services..."
+            docker compose up -d --remove-orphans
 
-            echo "Starting new services..."
-             docker compose up -d --remove-orphans
-
-            echo "Deployment complete at $(date)"
+            echo "=== Deployment completed @ $(date) ==="
