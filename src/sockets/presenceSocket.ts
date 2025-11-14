@@ -52,12 +52,12 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
     socket.emit("presence-sync", parsed);
 
     // JOIN
-    socket.on("join", async ({ displayName }) => {
+    socket.on("join", async ({ displayName,x, y }) => {
       const newUser = {
         userId,
         displayName: displayName || `User-${userId.slice(0, 6)}`,
-        x: 0,
-        y: 0,
+        x: x || 50,
+        y: y || 50,
         ts: Date.now(),
       };
 
@@ -69,7 +69,16 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
     // MOVE
     socket.on("move", async ({ x, y }) => {
-      const updated = { userId, x, y, ts: Date.now() };
+      const existing = await redisClient.hget(key,userId);
+      const currentUser = existing?JSON.parse(existing):{};
+
+       const updated = { 
+           userId,
+          displayName:currentUser.displayName,
+          x,
+          y,
+          ts:Date.now()
+          };
 
       await redisClient.hset(key, userId, JSON.stringify(updated));
 
