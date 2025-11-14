@@ -6,6 +6,7 @@ import {
   assignSuperviser,
   getAllTeams,
   addMembers,
+  deleteTeam,
 } from "../controllers/teamControllers";
 import { verifyWorkspaceToken } from "../middlewares/workspace.middleware"; 
 import { validate } from "../middlewares/validate";
@@ -21,5 +22,6 @@ managerRouter.put("/team/rename/:workspaceId/:teamId",validate(renameTeamSchema)
 managerRouter.put("/team/remove-member/:workspaceId/:teamId", verifyWorkspaceToken, removeMember);
 managerRouter.put("/team/assign-lead/:workspaceId/:teamId",validate(assignSuperviserSchema), verifyWorkspaceToken, assignSuperviser);
 managerRouter.put("/team/add-members/:workspaceId/:teamId", verifyWorkspaceToken, addMembers);
+managerRouter.delete("/team/:workspaceId/:teamId", verifyWorkspaceToken, deleteTeam);
 
 export default managerRouter;

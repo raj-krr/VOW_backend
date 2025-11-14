@@ -231,3 +231,39 @@ export const getTeamMembers = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+export const deleteTeam = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { teamId } = req.params;
+    const workspaceUser = req.workspaceUser;
+
+    if (!workspaceUser) throw new ApiError(401, "Not authorized");
+
+    const { workspaceId, userId } = workspaceUser;
+
+    if (!teamId) throw new ApiError(400, "Team ID is required");
+
+    const workspace = await WorkspaceModel.findById(workspaceId);
+    if (!workspace) throw new ApiError(404, "Workspace not found");
+
+    // Only workspace manager can delete teams
+    if (workspace.manager.toString() !== userId.toString()) {
+      throw new ApiError(403, "Only admin can delete a team");
+    }
+
+    const team = await TeamModel.findOne({ _id: teamId, workspaceId });
+    if (!team) throw new ApiError(404, "Team not found");
+
+    await TeamModel.deleteOne({ _id: teamId });
+
+    res.status(200).json({
+      success: true,
+      message: "Team deleted successfully",
+    });
+  } catch (err: any) {
+    console.error(err);
+    res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.message || "Server error",
+    });
+  }
+};
