@@ -7,7 +7,6 @@ import { getRedis } from "../libs/redis";
 
 const redisClient = getRedis();
 
-
 export const initBaseMap = async (req: Request, res: Response) => {
   try {
     const existingMap = await Map.findOne();
@@ -25,15 +24,17 @@ export const initBaseMap = async (req: Request, res: Response) => {
     const newMap = new Map({
       name: layoutData.name || "Base Office Map",
       dimensions: layoutData.dimensions,
-      rooms: layoutData.rooms,
       objects: layoutData.objects,
       metadata: { initializedAt: new Date() },
     });
 
     await newMap.save();
-    return res
-      .status(201)
-      .json({ success: true, msg: "Base map created", map: newMap });
+
+    return res.status(201).json({
+      success: true,
+      msg: "Base map created",
+      map: newMap,
+    });
   } catch (err) {
     console.error("initBaseMap error:", err);
     return res.status(500).json({ success: false, msg: "Server error" });
