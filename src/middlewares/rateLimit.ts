@@ -5,6 +5,11 @@ import { Request } from "express";
 export const ipLimiter = rateLimit({
   windowMs: 60 * 1000, 
   max: 100,
+  skip: (req) => {
+    if (req.path && req.path.startsWith("/videochat")) return true;
+    if (req.ip === "127.0.0.1" || req.ip === "::1") return true;
+    return false;
+  },
   message: {
     success: false,
     msg: "Too many requests from this IP. Please try again later.",
