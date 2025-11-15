@@ -19,7 +19,6 @@ export const initSocket = (server: HttpServer) => {
     allowedHeaders: ["Authorization", "Content-Type"],
   },
   transports: ["websocket", "polling"],
-  perMessageDeflate: false,
   allowUpgrades: true,
   pingTimeout: 60000,
   pingInterval: 25000,
