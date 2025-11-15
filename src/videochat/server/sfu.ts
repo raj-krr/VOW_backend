@@ -23,7 +23,7 @@ export class SFUServer {
   private redisManager: RedisManager;
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
-  private static readonly ROOM_EMPTY_TTL_MS = Number(process.env.ROOM_EMPTY_TTL_MS ?? 60000);
+  private static readonly ROOM_EMPTY_TTL_MS = Number(process.env.ROOM_EMPTY_TTL_MS ?? 240000);
 
   constructor(redisUrl?: string) {
     this.bandwidthMonitor = new BandwidthMonitor();
