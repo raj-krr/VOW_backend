@@ -12,11 +12,6 @@ export class WebSocketSignalingServer {
   private sfuServer: SFUServer;
   private participantSockets: Map<string, { roomId: string; participantId: string }> = new Map();
 
-  /**
-   * @param server 
-   * @param sfuServer 
-   * @param path 
-   */
   constructor(server: Server, sfuServer: SFUServer, path = '/signaling') {
     this.sfuServer = sfuServer;
     this.wss = new ws.WebSocketServer({ server, path });
@@ -31,33 +26,25 @@ export class WebSocketSignalingServer {
 
       socket.on('message', async (data: ws.Data) => {
         try {
-          // Normalize incoming data:
-          // ws can give string | Buffer | ArrayBuffer | Buffer[]
           if (typeof data === 'string') {
-            // text message
             this.handleTextMessage(socket, data);
             return;
           }
 
-          // Convert ArrayBuffer / Buffer[] to Buffer
           let buf: Buffer;
           if (Buffer.isBuffer(data)) {
             buf = data;
           } else if (data instanceof ArrayBuffer) {
             buf = Buffer.from(data);
           } else if (Array.isArray(data)) {
-            // Buffer[]
             buf = Buffer.concat((data as Buffer[]).map(d => Buffer.isBuffer(d) ? d : Buffer.from(d as any)));
           } else {
-            // fallback
             buf = Buffer.from(data as any);
           }
 
-          // Safety: check length before indexing
           if (buf.length >= 2 && buf[0] === 0x00 && buf[1] === 0x00) {
             this.handleBinaryMessage(socket, buf);
           } else {
-            // maybe a text frame serialized as binary
             this.handleTextMessage(socket, buf.toString());
           }
         } catch (error) {
@@ -74,7 +61,6 @@ export class WebSocketSignalingServer {
         logger.error('WebSocket error:', error);
       });
 
-      // Send initial connection success
       try {
         if (socket.readyState === ws.WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'connected' }));
@@ -89,9 +75,21 @@ export class WebSocketSignalingServer {
 
   private handleTextMessage(socket: ws.WebSocket, data: string) {
     try {
-      const message = Protocol.deserialize(data);
+      logger.debug('[Raw incoming WS text]', data);
+
+      let message;
+      try {
+        message = Protocol.deserialize(data);
+      } catch (e) {
+        logger.error('Protocol.deserialize failed for raw:', data, ' error:', e);
+        this.sendError(socket, 'Invalid message format');
+        return;
+      }
+
+      logger.debug('[Deserialized message]', message);
 
       if (!Protocol.isValidMessage(message)) {
+        logger.warn('Protocol.isValidMessage returned false for:', message);
         this.sendError(socket, 'Invalid message format');
         return;
       }
@@ -139,7 +137,6 @@ export class WebSocketSignalingServer {
           logger.warn(`Unknown message type: ${message.type}`);
       }
 
-      // Update heartbeat
       if (message.participantId && message.roomId) {
         this.sfuServer.handleHeartbeat(message.roomId, message.participantId);
       }
@@ -184,14 +181,12 @@ export class WebSocketSignalingServer {
         return;
       }
 
-      // Store socket mapping
       const socketId = this.getSocketId(socket);
       this.participantSockets.set(socketId, {
         roomId,
         participantId: result.participantId
       });
 
-      // Send success response
       if (socket.readyState === ws.WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type: SignalingMessageType.ROOM_STATE,
