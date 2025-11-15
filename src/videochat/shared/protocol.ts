@@ -6,7 +6,14 @@ export class Protocol {
   }
 
   static deserialize(data: string): SignalingMessage {
-    return JSON.parse(data);
+    try {
+      return JSON.parse(data);
+    } catch (err) {
+      const e = new Error('Protocol.deserialize: invalid JSON');
+      // @ts-ignore 
+      e.cause = err;
+      throw e;
+    }
   }
 
   static createMessage(
@@ -26,12 +33,23 @@ export class Protocol {
   }
 
   static isValidMessage(message: any): message is SignalingMessage {
-    return (
-      message &&
-      typeof message.type === 'string' &&
-      typeof message.roomId === 'string' &&
-      typeof message.participantId === 'string'
-    );
+    if (!message || typeof message.type !== 'string') return false;
+
+    if (typeof message.roomId !== 'string' || message.roomId.trim() === '') return false;
+
+    if (message.type === SignalingMessageType.JOIN) {
+      return true;
+    }
+
+    if (typeof message.participantId !== 'string' || message.participantId.trim() === '') {
+      return false;
+    }
+
+    if ('targetParticipantId' in message && message.targetParticipantId != null && typeof message.targetParticipantId !== 'string') {
+      return false;
+    }
+
+    return true;
   }
 
   static encodeMediaChunk(chunk: Buffer, metadata: any): Buffer {
@@ -39,7 +57,7 @@ export class Protocol {
     const metadataBuffer = Buffer.from(metadataStr);
     const metadataLength = Buffer.alloc(4);
     metadataLength.writeUInt32BE(metadataBuffer.length, 0);
-    
+
     return Buffer.concat([metadataLength, metadataBuffer, chunk]);
   }
 
@@ -48,7 +66,7 @@ export class Protocol {
     const metadataBuffer = data.slice(4, 4 + metadataLength);
     const metadata = JSON.parse(metadataBuffer.toString());
     const chunk = data.slice(4 + metadataLength);
-    
+
     return { metadata, chunk };
   }
 }
