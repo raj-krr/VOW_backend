@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Presence Test</title>
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding: 20px; }
+    .controls { margin-bottom: 12px; }
+    input, button { margin-right: 8px; padding: 8px; }
+    #map { width: 600px; height: 400px; border: 1px solid #ddd; position: relative; background: linear-gradient(#f8fafc, #ffffff); }
+    .avatar { position: absolute; width: 28px; height: 28px; border-radius: 50%; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; background:#0ea5e9; box-shadow:0 1px 4px rgba(0,0,0,0.15);} 
+    #log { max-height: 160px; overflow:auto; border:1px solid #eee; padding:8px; background:#fff; }
+    #userList { margin-top:12px; }
+    .user-item { padding:6px; border-bottom:1px solid #f1f1f1; }
+    .status { margin-left:12px; font-size:13px; color:#666 }
+  </style>
+</head>
+<body>
+  <h2>Workspace Presence — Local Test</h2>
+
+  <div class="controls">
+    <label>Workspace ID: <input id="workspaceId" value="test-ws" /></label>
+    <label>User ID: <input id="userId" placeholder="auto-generated per tab" /></label>
+    <label>JWT token (optional): <input id="token" style="width:360px" placeholder="paste workspace JWT token if your server verifies it" /></label>
+    <button id="setCookie">Set cookie & reload</button>
+    <span class="status" id="ioStatus">Loading socket.io client...</span>
+  </div>
+
+  <p style="font-size:13px;color:#555">Tip: if your server expects a signed JWT, paste a valid token in the field before clicking <strong>Set cookie & reload</strong>. The cookie name will be <code>workspaceToken_<em>workspaceId</em></code>.</p>
+
+  <div>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+    <button id="joinBtn" disabled>Join</button>
+    <button id="leaveBtn" disabled>Leave</button>
+  </div>
+
+  <h3>Map (click to move)</h3>
+  <div id="map"></div>
+
+  <h3>Active users</h3>
+  <div id="userList"></div>
+
+  <h3>Event log</h3>
+  <div id="log"></div>
+
+  <!-- Attempt to load local socket.io client first; if it fails, fall back to CDN -->
+  <script>
+    (function loadSocketIo() {
+      const LOCAL = '/socket.io/socket.io.js';
+      const CDN = 'https://cdn.socket.io/4.6.1/socket.io.min.js';
+
+      function insertScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = () => resolve(src);
+          s.onerror = () => reject(new Error('failed to load ' + src));
+          document.head.appendChild(s);
+        });
+      }
+
+      // Try local first, then CDN
+      insertScript(LOCAL).then(src => {
+        document.getElementById('ioStatus').textContent = 'socket.io client loaded from ' + src;
+      }).catch(() => {
+        // fallback to CDN
+        insertScript(CDN).then(src => {
+          document.getElementById('ioStatus').textContent = 'socket.io client loaded from CDN';
+        }).catch(() => {
+          document.getElementById('ioStatus').textContent = 'Failed to load socket.io client. Please ensure /socket.io/socket.io.js is served or allow CDN.';
+        });
+      });
+    })();
+  </script>
+
+  <script>
+    // Auto-set workspace cookie for quick multi-user testing (per-tab unique user)
+    const AUTO_WS_ID = 'test-ws';
+    const AUTO_COOKIE = `workspaceToken_${AUTO_WS_ID}`;
+    if (!document.cookie.includes(AUTO_COOKIE)) {
+      const autoUid = 'user-' + Math.floor(Math.random()*10000);
+      const fake = btoa(JSON.stringify({ userId: autoUid }));
+      document.cookie = `${AUTO_COOKIE}=${fake}; path=/;`;
+      // also prefill userId input so you can see it
+      document.addEventListener('DOMContentLoaded', () => {
+        const u = document.getElementById('userId'); if (u && !u.value) u.value = autoUid;
+      });
+    }
+
+    function setCookie(name, value, days = 1) {
+      const expires = new Date(Date.now() + days*24*60*60*1000).toUTCString();
+      document.cookie = `${name}=${value}; path=/; expires=${expires}`;
+    }
+
+    const workspaceIdInput = document.getElementById('workspaceId');
+    const userIdInput = document.getElementById('userId');
+    const tokenInput = document.getElementById('token');
+    const setCookieBtn = document.getElementById('setCookie');
+
+    setCookieBtn.addEventListener('click', () => {
+      const ws = workspaceIdInput.value.trim();
+      const t = tokenInput.value.trim();
+      if (!ws) return alert('Enter workspace id');
+      const cookieName = `workspaceToken_${ws}`;
+      if (!t) {
+        const fake = btoa(JSON.stringify({ userId: userIdInput.value || 'local-user' }))
+        setCookie(cookieName, fake);
+        alert('Set fake token cookie (not signed). If your server verifies JWT signatures, paste a real token first.');
+      } else {
+        setCookie(cookieName, t);
+        alert('Set provided token cookie. Reload page to ensure server sees it.');
+      }
+      location.reload();
+    });
+
+    // Helper to wait for io to be available (timeout after 5s)
+    function waitForIo(timeout = 5000) {
+      return new Promise((resolve, reject) => {
+        const start = Date.now();
+        (function check() {
+          if (window.io) return resolve(window.io);
+          if (Date.now() - start > timeout) return reject(new Error('io not available'));
+          setTimeout(check, 100);
+        })();
+      });
+    }
+
+    // --- Socket client logic ---
+    let socket = null;
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const logEl = document.getElementById('log');
+    const userListEl = document.getElementById('userList');
+    const mapEl = document.getElementById('map');
+
+    function appendLog(msg) { const p = document.createElement('div'); p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`; logEl.prepend(p); }
+
+    connectBtn.addEventListener('click', async () => {
+      if (socket) return;
+      appendLog('Waiting for socket.io client...');
+      try {
+        await waitForIo(5000);
+      } catch (err) {
+        appendLog('Error: socket.io client not loaded. See status message above.');
+        return alert('socket.io client not available. Check /socket.io/socket.io.js or allow CDN.');
+      }
+
+      // connects to same host
+      try {
+        // Auto-detect backend based on environment
+      const backendUrl = location.hostname === "localhost" || location.hostname === "127.0.0.1"
+        ? "http://localhost:8000"  // Local environment
+        : "https://vow-org.me";   // Production
+
+      socket = io(backendUrl, { withCredentials: true, transports: ["websocket", "polling"] });
+      } catch (err) {
+        appendLog('Error creating socket: ' + err.message);
+        return;
+      }
+
+      socket.on('connect', () => {
+        appendLog('connected: ' + socket.id);
+        connectBtn.disabled = true; disconnectBtn.disabled = false; joinBtn.disabled = false; leaveBtn.disabled = true;
+      });
+
+      socket.on('presence-sync', (users) => {
+        appendLog('presence-sync received (' + (users?.length ?? Object.keys(users||{}).length) + ')');
+        renderUsers(users || []);
+      });
+
+      socket.on('user-joined', (u) => { appendLog('user-joined: ' + (u.displayName || u.userId)); upsertUser(u); });
+      socket.on('user-moved', (u) => { appendLog('user-moved: ' + u.userId); upsertUser(u); });
+      socket.on('user-left', ({ userId }) => { appendLog('user-left: ' + userId); removeUser(userId); });
+
+      socket.on('unauthorized', (msg) => { appendLog('unauthorized: ' + msg); });
+
+      socket.on('connect_error', (err) => { appendLog('connect_error: ' + err.message); });
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (!socket) return;
+      socket.disconnect(); socket = null;
+      appendLog('disconnected'); connectBtn.disabled = false; disconnectBtn.disabled = true; joinBtn.disabled = true; leaveBtn.disabled = true;
+      clearUsers();
+    });
+
+    joinBtn.addEventListener('click', () => {
+      if (!socket) return alert('connect first');
+      const userId = userIdInput.value || 'local-user';
+      const displayName = prompt('Display name', userId) || userId;
+      const x = Math.floor(Math.random()*520) + 40;
+      const y = Math.floor(Math.random()*320) + 40;
+      socket.emit('join', { displayName, x, y });
+      appendLog('emit join');
+      joinBtn.disabled = true; leaveBtn.disabled = false;
+    });
+
+    leaveBtn.addEventListener('click', () => {
+      if (!socket) return;
+      socket.emit('leave'); appendLog('emit leave'); joinBtn.disabled = false; leaveBtn.disabled = true; clearUsers();
+    });
+
+    // Map click to emit move
+    mapEl.addEventListener('click', (ev) => {
+      if (!socket) return;
+      const rect = mapEl.getBoundingClientRect();
+      const x = Math.round(ev.clientX - rect.left);
+      const y = Math.round(ev.clientY - rect.top);
+      socket.emit('move', { x, y });
+      appendLog('emit move -> ' + x + ',' + y);
+    });
+
+    // --- simple client-side store & UI ---
+    const users = {};
+
+    function renderUsers(list) {
+      clearUsers();
+      (list || []).forEach(u => upsertUser(u));
+    }
+
+    function upsertUser(u) {
+      if (!u || !u.userId) return;
+      users[u.userId] = u;
+      renderUserList();
+      renderAvatars();
+    }
+
+    function removeUser(userId) { delete users[userId]; renderUserList(); renderAvatars(); }
+    function clearUsers() { for (const k in users) delete users[k]; renderUserList(); renderAvatars(); }
+
+    function renderUserList() {
+      userListEl.innerHTML = '';
+      Object.values(users).forEach(u => {
+        const d = document.createElement('div'); d.className = 'user-item'; d.textContent = `${u.displayName || u.userId} — (${u.x || 0}, ${u.y || 0})`;
+        userListEl.appendChild(d);
+      });
+    }
+
+    function renderAvatars() {
+      // remove old avatars
+      mapEl.querySelectorAll('.avatar').forEach(n => n.remove());
+      Object.values(users).forEach(u => {
+        const a = document.createElement('div'); a.className = 'avatar'; a.textContent = (u.displayName||u.userId).slice(0,2).toUpperCase();
+        a.style.left = (Math.max(0, (u.x||50)-14)) + 'px';
+        a.style.top = (Math.max(0, (u.y||50)-14)) + 'px';
+        a.title = `${u.displayName || u.userId}\n${u.userId}`;
+        mapEl.appendChild(a);
+      });
+    }
+  </script>
+</body>
+</html>

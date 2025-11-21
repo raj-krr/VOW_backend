@@ -46,6 +46,7 @@ app.use(
       process.env.RENDER_URL as string,
       process.env.FRONTEND_URL_PROD as string,
       process.env.FRONTEND_URL_DEV as string,
+      "http://localhost:8000",
     ],
     credentials: true,
   })
@@ -53,6 +54,12 @@ app.use(
 
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.get("/presence-test", (req, res) => {
+  res.render("Presence-test");
+});
 
 // Helper to safely load a YAML file
 function safeLoadYAML(fileName: string) {

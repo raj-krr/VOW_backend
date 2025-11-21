@@ -63,6 +63,9 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
       await redisClient.hset(key, userId, JSON.stringify(newUser));
 
+        // Tell just this socket: "your identity is confirmed"
+  socket.emit("join-ack", { userId });
+
       // Broadcast only to this workspace
       io.to(workspaceId).emit("user-joined", newUser);
     });
