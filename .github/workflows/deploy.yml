@@ -72,7 +72,7 @@ jobs:
 
             echo "Downloading latest docker-compose.yml..."
             rm -f docker-compose.yml
-            curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/main/docker-compose.yml
+            curl -O https://raw.githubusercontent.com/raj-krr/VOW_backend/development/docker-compose.yml
 
             echo "Starting updated services..."
             docker compose up -d --remove-orphans
