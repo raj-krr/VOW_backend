@@ -3,7 +3,7 @@ name: CI/CD for VOW Backend
 on:
   push:
     branches:
-      - main
+      - development
 
 permissions:
   contents: read

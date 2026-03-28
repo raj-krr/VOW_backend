@@ -1,8 +1,7 @@
 import { Server, Socket } from "socket.io";
-import { getRedis } from "../libs/redis";
 import jwt from "jsonwebtoken";
 
-const redisClient = getRedis();
+const presenceStore: Record<string, Record<string, any>> = {};
 
 const getWorkspaceToken = (socket: Socket) => {
   const raw = socket.handshake.headers.cookie;
@@ -12,7 +11,6 @@ const getWorkspaceToken = (socket: Socket) => {
     raw.split(";").map((c) => c.trim().split("="))
   );
 
-  // cookie: workspaceToken_<workspaceId>
   const wsCookie = Object.keys(cookies).find((k) =>
     k.startsWith("workspaceToken_")
   );
@@ -39,20 +37,21 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
     const userId = decoded.userId;
 
-    const key = `presence:workspace:${workspaceId}`;
-
     console.log(`Presence: User ${userId} connected to workspace ${workspaceId}`);
 
-    // Join room
     socket.join(workspaceId);
 
-    // Send currently connected users
-    const users = await redisClient.hgetall(key);
-    const parsed = Object.values(users).map((u) => JSON.parse(u));
-    socket.emit("presence-sync", parsed);
+    // init workspace store
+    if (!presenceStore[workspaceId]) {
+      presenceStore[workspaceId] = {};
+    }
+
+    // send current users
+    const users = Object.values(presenceStore[workspaceId]);
+    socket.emit("presence-sync", users);
 
     // JOIN
-    socket.on("join", async ({ displayName,x, y }) => {
+    socket.on("join", ({ displayName, x, y }) => {
       const newUser = {
         userId,
         displayName: displayName || `User-${userId.slice(0, 6)}`,
@@ -61,42 +60,38 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
         ts: Date.now(),
       };
 
-      await redisClient.hset(key, userId, JSON.stringify(newUser));
+      presenceStore[workspaceId][userId] = newUser;
 
-        // Tell just this socket: "your identity is confirmed"
-  socket.emit("join-ack", { userId });
-
-      // Broadcast only to this workspace
+      socket.emit("join-ack", { userId });
       io.to(workspaceId).emit("user-joined", newUser);
     });
 
     // MOVE
-    socket.on("move", async ({ x, y }) => {
-      const existing = await redisClient.hget(key,userId);
-      const currentUser = existing?JSON.parse(existing):{};
+    socket.on("move", ({ x, y }) => {
+      const currentUser = presenceStore[workspaceId][userId] || {};
 
-       const updated = { 
-           userId,
-          displayName:currentUser.displayName,
-          x,
-          y,
-          ts:Date.now()
-          };
+      const updated = {
+        userId,
+        displayName: currentUser.displayName || "User",
+        x,
+        y,
+        ts: Date.now(),
+      };
 
-      await redisClient.hset(key, userId, JSON.stringify(updated));
+      presenceStore[workspaceId][userId] = updated;
 
       io.to(workspaceId).emit("user-moved", updated);
     });
 
     // LEAVE
-    socket.on("leave", async () => {
-      await redisClient.hdel(key, userId);
+    socket.on("leave", () => {
+      delete presenceStore[workspaceId][userId];
       io.to(workspaceId).emit("user-left", { userId });
     });
 
     // DISCONNECT
-    socket.on("disconnect", async () => {
-      await redisClient.hdel(key, userId);
+    socket.on("disconnect", () => {
+      delete presenceStore[workspaceId][userId];
       io.to(workspaceId).emit("user-left", { userId });
 
       console.log(`Presence: User ${userId} disconnected from workspace ${workspaceId}`);
