@@ -19,7 +19,6 @@ async function startServer() {
     const server = http.createServer(app);
 
     const io = initSocket(server);
-    dmSocketHandler(io);
 
     // await initVideoChat(app, server);
 

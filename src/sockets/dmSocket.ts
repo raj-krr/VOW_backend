@@ -4,7 +4,7 @@ import Workspace from "../models/workspace";
 import { verifySocketToken, getTokenFromSocket } from "./auth";
 
 
-export function dmSocketHandler(io: Server) {
+export function dmSocketHandler(io: Server, socket: Socket){
   io.on("connection", async (socket: Socket) => {
     try {
       const token =
@@ -73,10 +73,8 @@ export function dmSocketHandler(io: Server) {
 
             const dmRoom = getDMRoomId(user._id.toString(), receiverId.toString());
 
-            socket.join(dmRoom);
-            io.to(`user:${receiverId}`).socketsJoin(dmRoom);
-
-            io.to(dmRoom).emit("receive_dm", populated);
+           socket.emit("receive_dm", populated);                
+io.to(`user:${receiverId}`).emit("receive_dm", populated); 
             console.log(
               `DM ${user.username} → ${receiverId}: ${content}`
             );

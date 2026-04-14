@@ -17,7 +17,7 @@ const channelSchema = new Schema<IChannel>(
   {
     name: { type: String, required: true },
     type: { type: String, enum: ["text", "voice"], default: "text" },
-    server: { type: Schema.Types.ObjectId, ref: "Server", required: true },
+    server: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
     members: [{ type: Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }

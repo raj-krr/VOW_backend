@@ -99,7 +99,7 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
   } catch (err: any) {
     console.error("Presence socket error:", err.message);
-    socket.emit("unauthorized", err.message);
-    socket.disconnect(true);
+    // socket.emit("unauthorized", err.message);
+    // socket.disconnect(true);
   }
 };

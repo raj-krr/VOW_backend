@@ -48,6 +48,17 @@ app.use(
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+app.get("/test", (req, res) => {
+  const filePath = path.resolve(__dirname, "views", "socket-test.html");
+  fs.readFile(filePath, "utf8", (err, data) => {
+    if (err) {
+      console.error("File read error:", err);
+      return res.status(500).send("File not found");
+    }
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(data);
+  });
+});
 app.get("/presence-test", (req, res) => {
   res.render("Presence-test");
 });

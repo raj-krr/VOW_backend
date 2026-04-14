@@ -2,7 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server as IOServer, Socket } from "socket.io";
 import chatSocket from "./chatSocket";
 import { setupPresenceSocket } from "./presenceSocket";
-
+import { dmSocketHandler } from "./dmSocket";
 export const initSocket = (server: HttpServer) => {
   const io = new IOServer(server, {
   cors: {
@@ -31,6 +31,7 @@ export const initSocket = (server: HttpServer) => {
     
     // Initialize socket modules
     chatSocket(io, socket);
+    dmSocketHandler(io, socket);
     setupPresenceSocket(io, socket);
 
     socket.on("disconnect", (reason) => {

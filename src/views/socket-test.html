@@ -1,0 +1,1703 @@
+
+import { Request, Response } from "express";
+import DirectMessage from "../models/directMessage";
+import Workspace from "../models/workspace";
+
+
+export const sendDirectMessage = async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, user1, user2 } = req.params;
+    const { content, attachments } = req.body;
+
+    
+    const currentUserId = (req as any).user?._id; 
+
+    if (!currentUserId)
+      return res.status(401).json({ error: "Unauthorized: user not found in token" });
+
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace)
+      return res.status(404).json({ error: "Workspace not found" });
+
+    const isMember1 = workspace.members.some((m) => String(m) === user1);
+    const isMember2 = workspace.members.some((m) => String(m) === user2);
+    if (!isMember1 || !isMember2)
+      return res.status(403).json({ error: "Users not in same workspace" });
+
+    let sender, receiver;
+
+    if (String(currentUserId) === user1) {
+      sender = user1;
+      receiver = user2;
+    } else if (String(currentUserId) === user2) {
+      sender = user2;
+      receiver = user1;
+    } else {
+      return res
+        .status(403)
+        .json({ error: "You are not part of this direct chat" });
+    }
+
+    if (!content || content.trim() === "")
+      return res.status(400).json({ error: "Message content is required" });
+
+    const message = await DirectMessage.create({
+      workspaceId,
+      sender,
+      receiver,
+      content,
+      attachments,
+    });
+
+   const savedMessage = await DirectMessage.findById(message._id)
+  .populate("sender", "username avatar")
+  .populate("receiver", "username avatar");
+
+    res.status(201).json(savedMessage);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+export const getDirectMessages = async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, user1, user2 } = req.params;
+
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace)
+      return res.status(404).json({ error: "Workspace not found" });
+
+    const isMember1 = workspace.members.some((m) => String(m) === user1);
+    const isMember2 = workspace.members.some((m) => String(m) === user2);
+    if (!isMember1 || !isMember2)
+      return res.status(403).json({ error: "Users not in same workspace" });
+
+    const messages = await DirectMessage.find({
+      workspaceId,
+      $or: [
+        { sender: user1, receiver: user2 },
+        { sender: user2, receiver: user1 },
+      ],
+    })
+      .populate("sender", "username avatar")
+      .populate("receiver", "username avatar")
+      .sort({ createdAt: 1 });
+
+    res.json(messages);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteDirectMessage = async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    const deleted = await DirectMessage.findByIdAndDelete(messageId);
+    if (!deleted)
+      return res.status(404).json({ error: "Message not found" });
+
+    res.json({ success: true, message: "Message deleted", data: deleted });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+import mongoose, { Document, Schema } from "mongoose";
+import { IUser } from "./user";
+import { IWorkspace } from "./workspace";
+
+export interface IDirectMessage extends Document {
+  sender: IUser["_id"];
+  receiver: IUser["_id"];
+  workspaceId: IWorkspace["_id"];
+  content: string;
+  attachments?: { url: string; filename?: string }[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const directMessageSchema = new Schema<IDirectMessage>(
+  {
+    sender: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    receiver: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
+    content: { type: String, required: true },
+    attachments: [{ url: String, filename: String }],
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model<IDirectMessage>(
+  "DirectMessage",
+  directMessageSchema
+);
+import express from "express";
+import {
+  sendDirectMessage,
+  getDirectMessages,
+  deleteDirectMessage,
+} from "../controllers/directMessageController";
+
+import { verifyJWT } from "../middlewares/authmiddleware";
+
+const router = express.Router();
+
+router.post("/:workspaceId/:user1/:user2", verifyJWT,sendDirectMessage);
+
+router.get("/:workspaceId/:user1/:user2", getDirectMessages);
+
+router.delete("/:messageId", deleteDirectMessage);
+
+export default router;
+import { Request, Response } from "express";
+import Message from "../models/message";
+
+export const sendMessageRest = async (req: Request, res: Response) => {
+  try {
+    const { channelId, content, attachments } = req.body;
+    if(attachments.length === 0 && (!content || content.trim() === "")){
+      return  res.status(400).json({ error: "Message content or attachments are required" });}
+    const sender = (req as any).user?._id || req.body.sender;
+    const message = await Message.create({ channelId, sender, content, attachments });
+    const response: Record<string, unknown> = { message };
+    if(message.attachments && message.attachments.length > 0){
+
+      response['attachments'] = message.attachments;
+    }
+    if(message.content){
+      response['content'] = message.content;
+    }
+    response.channelId = message.channelId;
+    response['sender'] = message.sender;
+    res.status(201).json(response);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getChannelMessages = async (req: Request, res: Response) => {
+  try {
+    const { channelId } = req.params;
+    const messages = await Message.find({ channelId })
+      .populate("sender", "username avatar")
+      .sort({ createdAt: 1 });
+    res.json(messages);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteMessage = async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: "messageId is required" });
+    }
+    const deletedMessage = await Message.findByIdAndDelete(messageId);
+    if (!deletedMessage) {
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
+    res.status(200).json({ success: true, message: "Message deleted successfully", data: deletedMessage });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+import mongoose, { Document, Schema } from "mongoose";
+import { IUser } from "./user";
+import { IChannel } from "./channel";
+
+export interface IMessage extends Document {
+  channelId: IChannel["_id"];
+  sender: IUser["_id"];
+  content: string;
+  attachments?: { url: string; filename?: string }[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const messageSchema = new Schema<IMessage>(
+  {
+    channelId: { type: Schema.Types.ObjectId, ref: "Channel", required: true },
+    sender: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    content: { type: String },
+    attachments: [{ url: String, filename: String }],
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model<IMessage>("Message", messageSchema);
+import express from "express";
+import { sendMessageRest, getChannelMessages,deleteMessage } from "../controllers/messageController";
+import { verifyJWT } from "../middlewares/authmiddleware";
+
+const router = express.Router();
+
+router.post("/", verifyJWT, sendMessageRest);
+router.get("/channel/:channelId", verifyJWT, getChannelMessages);
+router.delete("/message/:messageId", deleteMessage);
+
+
+export default router;
+import jwt from "jsonwebtoken";
+import UserModel from "../models/user";
+import { Socket } from "socket.io";
+import cookie from "cookie";
+
+export interface DecodedToken {
+  _id: string;
+  email?: string;
+  iat?: number;
+  exp?: number;
+}
+
+export const verifySocketToken = async (token?: string) => {
+  if (!token) throw new Error("No token provided");
+  const decoded = jwt.verify(
+    token,
+    process.env.ACCESS_TOKEN_SECRET as string
+  ) as DecodedToken;
+  if (!decoded?._id) throw new Error("Invalid token");
+  const user = await UserModel.findById(decoded._id).select(
+    "-password -refreshToken"
+  );
+  if (!user) throw new Error("User not found");
+  return user;
+};
+
+export const getTokenFromSocket = (socket: Socket): string | undefined => {
+  const authToken = socket.handshake.auth?.token as string | undefined;
+  if (authToken) return authToken;
+
+  const cookieHeader = socket.handshake.headers.cookie;
+  console.log('Cookie Header:', cookieHeader);
+  if (!cookieHeader) return undefined;
+
+  const cookies = cookie.parse(cookieHeader);
+  console.log('Cookies:', cookies);
+  let token =
+    cookies.accessToken ||
+    cookies.Authorization ||
+    cookies.token ||
+    cookies.jwt ||
+    undefined;
+
+  if (!token) return undefined;
+  if (token.startsWith("Bearer ")) token = token.slice(7);
+
+  return token;
+};import { Server, Socket } from "socket.io";
+import Message from "../models/message";
+import Channel from "../models/channel";
+import Workspace from "../models/workspace";
+import { verifySocketToken, getTokenFromSocket } from "./auth";
+
+export default async function chatSocket(io: Server, socket: Socket) {
+  try {
+    const token = getTokenFromSocket(socket) || (socket.handshake.auth && (socket.handshake.auth as any).token);
+    const user = await verifySocketToken(token);
+    (socket as any).user = user;
+
+    socket.join(`user:${user._id}`);
+
+    socket.on("join_server", async (serverId: string) => {
+      try {
+        const server = await Workspace.findById(serverId);
+        if (!server) return socket.emit("error", "Server not found");
+        if (server.members.map((m) => String(m)).includes(String(user._id))) {
+          socket.join(`server:${serverId}`);
+          socket.emit("joined_server", serverId);
+        } else {
+          socket.emit("error", "Not a member of server");
+        }
+      } catch (err: any) {
+        socket.emit("error", err.message || "Failed to join server");
+      }
+    });
+
+    socket.on("join_channel", async (channelId: string) => {
+      try {
+        const channel = await Channel.findById(channelId);
+        if (!channel) return socket.emit("error", "Channel not found");
+        socket.join(`channel:${channelId}`);
+        socket.emit("joined_channel", channelId);
+      } catch (err: any) {
+        socket.emit("error", err.message || "Failed to join channel");
+      }
+    });
+
+    socket.on("send_message", async (payload: { channelId: string; content: string; attachments?: any[] }) => {
+      try {
+        const { channelId, content, attachments } = payload;
+        // basic validation
+        if ((attachments?.length === 0 || !attachments) && (!content || content.trim() === "")) {
+          return socket.emit("error", "Message content is required");
+        }
+        if (!channelId) {
+          return socket.emit("error", "Channel ID is required");
+        }
+
+        const channel = await Channel.findById(channelId);
+        if (!channel) return socket.emit("error", "Channel not found");
+
+        // create message
+        const message = await Message.create({
+          channelId,
+          sender: (socket as any).user._id,
+          content,
+          attachments,
+        });
+
+        const populated = await Message.findById(message._id).populate("sender", "username avatar");
+
+        // emit to everyone in channel
+        io.to(`channel:${channelId}`).emit("receive_message", populated);
+      } catch (err: any) {
+        socket.emit("error", err.message || "Send message failed");
+      }
+    });
+
+    socket.on("typing", (channelId: string) => {
+      socket.to(`channel:${channelId}`).emit("user_typing", { userId: user._id });
+    });
+
+    socket.on("stop_typing", (channelId: string) => {
+      socket.to(`channel:${channelId}`).emit("user_stop_typing", { userId: user._id });
+    });
+
+    // leave channel
+    socket.on("leave_channel", (channelId: string) => {
+      socket.leave(`channel:${channelId}`);
+      socket.emit("left_channel", channelId);
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`Chat user disconnected: ${user._id}`);
+    });
+  } catch (err: any) {
+    console.error("Chat socket authentication error:", err);
+    socket.emit("unauthorized", err.message);
+    socket.disconnect(true);
+  }
+}import { Server, Socket } from "socket.io";
+import DirectMessage from "../models/directMessage";
+import Workspace from "../models/workspace";
+import { verifySocketToken, getTokenFromSocket } from "./auth";
+
+
+export function dmSocketHandler(io: Server) {
+  io.on("connection", async (socket: Socket) => {
+    try {
+      const token =
+        getTokenFromSocket(socket) ||
+        (socket.handshake.auth && (socket.handshake.auth as any).token);
+
+      const user = (await verifySocketToken(token)) as any;
+      (socket as any).user = user;
+      socket.join(`user:${user._id}`);
+      console.log(`DM socket connected: ${user.username} (${user._id})`);
+
+      socket.on("join_workspace", async (workspaceId: string) => {
+        const workspace = await Workspace.findById(workspaceId);
+        if (!workspace)
+          return socket.emit("error", "Workspace not found");
+
+        const isMember = workspace.members
+          .map((m) => String(m))
+          .includes(String(user._id));
+        if (!isMember)
+          return socket.emit("error", "Not a member of workspace");
+
+        socket.join(`workspace:${workspaceId}`);
+        socket.emit("joined_workspace", workspaceId);
+        console.log(`${user.username} joined workspace ${workspaceId}`);
+      });
+
+      socket.on(
+        "send_dm",
+        async (payload: {
+          receiverId: string;
+          workspaceId: string;
+          content: string;
+          attachments?: { url: string; filename?: string }[];
+        }) => {
+          try {
+            const { receiverId, workspaceId, content, attachments } = payload;
+
+            if (!receiverId || !workspaceId || !content)
+              return socket.emit("error", "Missing DM data");
+
+            const workspace = await Workspace.findById(workspaceId);
+            if (
+              !workspace ||
+              !workspace.members
+                .map((m) => String(m))
+                .includes(String(user._id)) ||
+              !workspace.members
+                .map((m) => String(m))
+                .includes(String(receiverId))
+            ) {
+              return socket.emit("error", "Both users must belong to workspace");
+            }
+
+            const message = await DirectMessage.create({
+              sender: user._id,
+              receiver: receiverId,
+              workspaceId,
+              content,
+              attachments,
+            });
+
+            const populated = await DirectMessage.findById(message._id)
+              .populate("sender", "username avatar")
+              .populate("receiver", "username avatar");
+
+            const dmRoom = getDMRoomId(user._id.toString(), receiverId.toString());
+
+            socket.join(dmRoom);
+            io.to(`user:${receiverId}`).socketsJoin(dmRoom);
+
+            io.to(dmRoom).emit("receive_dm", populated);
+            console.log(
+              `DM ${user.username} → ${receiverId}: ${content}`
+            );
+          } catch (err: any) {
+            socket.emit("error", err.message || "Send DM failed");
+          }
+        }
+      );
+
+      socket.on("dm_typing", (receiverId: string) => {
+        io.to(`user:${receiverId}`).emit("dm_user_typing", {
+          userId: user._id,
+        });
+      });
+      socket.on("dm_stop_typing", (receiverId: string) => {
+        io.to(`user:${receiverId}`).emit("dm_user_stop_typing", {
+          userId: user._id,
+        });
+      });
+
+      socket.on("disconnect", () => {
+        console.log(`DM socket disconnected: ${user.username}`);
+      });
+    } catch (err: any) {
+      socket.emit("unauthorized", err.message);
+      socket.disconnect(true);
+    }
+  });
+}
+
+function getDMRoomId(userA: string, userB: string): string {
+  return `dm:${[userA, userB].sort().join(":")}`;
+}
+import { Server as HttpServer } from "http";
+import { Server as IOServer, Socket } from "socket.io";
+import chatSocket from "./chatSocket";
+import { setupPresenceSocket } from "./presenceSocket";
+
+export const initSocket = (server: HttpServer) => {
+  const io = new IOServer(server, {
+  cors: {
+    origin: [
+      process.env.FRONTEND_URL as string,
+      "https://vow-org.me", 
+      "http://localhost:5173",
+      "http://127.0.0.1:3000",
+      process.env.RENDER_URL as string,
+      process.env.FRONTEND_URL_PROD as string,
+      process.env.FRONTEND_URL_DEV as string,
+    ],
+    credentials: true,
+    allowedHeaders: ["Authorization", "Content-Type"],
+  },
+  transports: ["websocket", "polling"],
+  allowUpgrades: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  cookie: true,
+  allowEIO3: true
+});
+
+  io.on("connection", (socket) => {
+    console.log("Socket user connected:", socket.id);
+    
+    // Initialize socket modules
+    chatSocket(io, socket);
+    setupPresenceSocket(io, socket);
+
+    socket.on("disconnect", (reason) => {
+      console.log("Socket user disconnected:", socket.id, "Reason:", reason);
+    });
+
+    // Optional: handle individual socket errors
+    socket.on("error", (error) => {
+      console.error("Socket error:", socket.id, error);
+    });
+  });
+
+  console.log("Socket.IO initialized with chat and presence modules");
+
+  return io;
+};import dotenv from "dotenv";
+dotenv.config();
+
+import http from "http";
+import app from "./app";
+import mongoDb from "./libs/db";
+import { initSocket } from "./sockets";
+import { dmSocketHandler } from "./sockets/dmSocket";
+import { initVideoChat } from "./videochat/init";
+import cron from "node-cron";
+import UserModel from "./models/user";
+
+const PORT = process.env.PORT || 8000;
+
+async function startServer() {
+  try {
+    await mongoDb();
+
+    const server = http.createServer(app);
+
+    const io = initSocket(server);
+    dmSocketHandler(io);
+
+    // await initVideoChat(app, server);
+
+    server.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+
+    // cron
+    cron.schedule("0 2 * * *", async () => {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      await UserModel.deleteMany({
+        isVerified: false,
+        createdAt: { $lt: cutoff },
+      });
+    });
+
+  } catch (err) {
+    console.error("Startup error:", err);
+    process.exit(1);
+  }
+}
+
+startServer();import express, { Application, Request, Response, NextFunction } from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import path from "path";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yamljs";
+import deepmerge from "deepmerge";
+import fs from "fs";
+
+// routes
+import AuthRoutes from "./routes/authroutes";
+import healthRoutes from "./routes/healthroutes";
+import meRouter from "./routes/meRoutes";
+import fileRouter from "./routes/fileRoutes";
+import workspaceRouter from "./routes/workspaceRoute";
+import managerRouter from "./routes/managerRoutes";
+import superviserRouter from "./routes/superviserRoute";
+import channelRoutes from "./routes/channelRoutes";
+import messageRoutes from "./routes/messageRoutes";
+import mapRoutes from "./routes/mapRoutes";
+import roomRoutes from "./routes/roomRoutes";
+import meetingRoutes from "./routes/meetingRoutes";
+import dmRouter from "./routes/directMessageRoutes";
+
+const app: Application = express();
+
+// middlewares
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+app.use(
+  cors({
+    origin: [
+      process.env.FRONTEND_URL as string,
+      "http://localhost:5173",
+      "http://127.0.0.1:3000",
+      process.env.RENDER_URL as string,
+      process.env.FRONTEND_URL_PROD as string,
+      process.env.FRONTEND_URL_DEV as string,
+      "http://localhost:8000",
+    ],
+    credentials: true,
+  })
+);
+
+// views
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+
+app.get("/presence-test", (req, res) => {
+  res.render("Presence-test");
+});
+
+// swagger helper
+function safeLoadYAML(fileName: string) {
+  const filePath = path.resolve(__dirname, "swagger", fileName);
+  return fs.existsSync(filePath) ? YAML.load(filePath) : {};
+}
+
+// swagger merge
+const mergedDoc = deepmerge.all([
+  safeLoadYAML("auth.yaml"),
+  safeLoadYAML("me.yaml"),
+  safeLoadYAML("file.yaml"),
+  safeLoadYAML("workspace.yaml"),
+  safeLoadYAML("meeting.yaml"),
+  safeLoadYAML("map.yaml"),
+  safeLoadYAML("msg.yaml"),
+  safeLoadYAML("channel.yaml"),
+  safeLoadYAML("room.yaml"),
+  safeLoadYAML("dm.yaml"),
+  safeLoadYAML("swagger.yaml"),
+]);
+
+if (Object.keys(mergedDoc).length > 0) {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(mergedDoc));
+}
+
+// routes
+app.use("/auth", AuthRoutes);
+app.use("/", healthRoutes);
+app.use("/me", meRouter);
+app.use("/files", fileRouter);
+app.use("/channels", channelRoutes);
+app.use("/messages", messageRoutes);
+app.use("/workspaces", workspaceRouter);
+app.use("/manager", managerRouter);
+app.use("/superviser", superviserRouter);
+app.use("/maps", mapRoutes);
+app.use("/", roomRoutes);
+app.use("/meeting", meetingRoutes);
+app.use("/dm", dmRouter);
+
+// error handler
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  const error = err instanceof Error ? err : new Error("Unknown error");
+  const statusCode = (err as any).statusCode || 500;
+
+  res.status(statusCode).json({
+    success: false,
+    msg: error.message,
+  });
+});
+
+export default app;import { Request, Response } from "express";
+import Channel from "../models/channel";
+
+export const createChannel = async (req: Request, res: Response) => {
+  try {
+    const { name, type = "text", workspaceId, members = [] } = req.body;
+    const channel = await Channel.create({ name, type, server: workspaceId, members });
+    res.status(201).json(channel);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getServerChannels = async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const channels = await Channel.find({ server: workspaceId }).populate("members", "username avatar");
+    res.json(channels);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteChannel = async (req:Request ,res:Response) => {
+  try {
+    const { channelId } = req.params;
+
+    if (!channelId){
+      return res.status(400).json({ success:false, message: "channelId is required"});
+    }
+    const deletedChannel = await Channel.findByIdAndDelete(channelId);
+  if(!deletedChannel){
+    res.status(404).json({success:false, message:"channel not found"})
+  }
+  res.status(200).json({ success:true, message:"channel deleted successfully"});
+  }catch(err:any){
+    res.status(500).json({ success:false, error:err.message})
+  }
+
+};
+
+export const updateChannelName = async (req: Request, res: Response) => {
+  try {
+    const { channelId } = req.params;
+    const { name } = req.body;
+
+    if (!channelId || !name) {
+      return res.status(400).json({ success: false, message: "channelId and name are required" });
+    }
+
+    const updatedChannel = await Channel.findByIdAndUpdate(
+      channelId,
+      { name },
+      { new: true }
+    );
+
+    if (!updatedChannel) {
+      return res.status(404).json({ success: false, message: "Channel not found" });
+    }
+
+    res.status(200).json({ success: true, message: "Channel name updated successfully", channel: updatedChannel });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+import mongoose, { Document, Schema } from "mongoose";
+import { IUser } from "./user";
+import workspace from "./workspace";
+
+export type ChannelType = "text" | "voice";
+
+export interface IChannel extends Document {
+  name: string;
+  type: ChannelType;
+  server:mongoose.Types.ObjectId ;
+  members:mongoose.Types.ObjectId[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const channelSchema = new Schema<IChannel>(
+  {
+    name: { type: String, required: true },
+    type: { type: String, enum: ["text", "voice"], default: "text" },
+    server: { type: Schema.Types.ObjectId, ref: "Server", required: true },
+    members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model<IChannel>("Channel", channelSchema);
+import express from "express";
+import { createChannel, deleteChannel, getServerChannels, updateChannelName } from "../controllers/channelController";
+import { verifyJWT } from "../middlewares/authmiddleware";
+import { DeleteBucketCorsCommand } from "@aws-sdk/client-s3";
+
+const router = express.Router();
+
+router.post("/", verifyJWT, createChannel);
+router.get("/workspace/:workspaceId", verifyJWT, getServerChannels);
+router.delete("/:channelId",verifyJWT, deleteChannel);
+router.put("/:channelId", updateChannelName);
+export default router;
+bro these are my messages code dm and group chats where is the problem in this and also explain this
+
+Show more
+8:57 PM
+Looking at your code, I can spot several issues. Let me break them down:
+
+🔴 Critical Bugs
+1. DM Socket — Double io.on("connection") Conflict
+typescript
+// dmSocket.ts — YOU'RE DOING THIS:
+io.on("connection", async (socket) => { ... }) // ← inside dmSocketHandler
+
+// index.ts — BUT ALSO THIS:
+io.on("connection", (socket) => {
+  chatSocket(io, socket);  // ← already handling connection here
+})
+Problem: Every connection fires TWO handlers. DM socket auth runs separately from chat socket auth, causing duplicate connections, race conditions, and potential auth conflicts.
+
+Fix: Don't use io.on("connection") inside dmSocketHandler. Instead, call it like chatSocket:
+
+typescript
+// dmSocket.ts — change signature to:
+export function dmSocketHandler(io: Server, socket: Socket) { ... }
+
+// index.ts — call it alongside chatSocket:
+io.on("connection", (socket) => {
+  chatSocket(io, socket);
+  dmSocketHandler(io, socket);  // ← pass socket directly
+  setupPresenceSocket(io, socket);
+});
+2. deleteChannel — Missing return on 404
+typescript
+const deletedChannel = await Channel.findByIdAndDelete(channelId);
+if(!deletedChannel){
+  res.status(404).json({...})  // ← no return!
+}
+res.status(200).json({...})  // ← this ALSO runs → "Cannot set headers after sent"
+Fix:
+
+typescript
+if (!deletedChannel) {
+  return res.status(404).json({ success: false, message: "channel not found" });
+}
+3. sendMessageRest — Crash if attachments is undefined
+typescript
+if(attachments.length === 0 && (!content || ...))  // ← attachments could be undefined → TypeError crash
+Fix:
+
+typescript
+if((!attachments || attachments.length === 0) && (!content || content.trim() === "")) {
+🟡 Logic / Security Issues
+4. getDirectMessages — No auth check
+typescript
+router.get("/:workspaceId/:user1/:user2", getDirectMessages); // ← no verifyJWT!
+Anyone can read anyone's DMs. Add verifyJWT and verify the requester is user1 or user2.
+
+5. deleteDirectMessage / deleteMessage — No ownership check
+Anyone who knows a messageId can delete any message. You should verify req.user._id === message.sender.
+
+6. DM Socket — socketsJoin race condition
+typescript
+socket.join(dmRoom);
+io.to(`user:${receiverId}`).socketsJoin(dmRoom); // receiver might not be online
+io.to(dmRoom).emit("receive_dm", populated);      // emits before join completes
+The socketsJoin is async under the hood. The receiver may miss the message. The safer pattern is to just emit directly to user:${receiverId} instead of building a shared room dynamically:
+
+typescript
+socket.emit("receive_dm", populated);                    // sender sees it
+io.to(`user:${receiverId}`).emit("receive_dm", populated); // receiver gets it
+🟠 Minor Issues
+7. Channel model — ref: "Server" should be ref: "Workspace"
+typescript
+server: { type: Schema.Types.ObjectId, ref: "Server", ... } // ← wrong ref name
+Your model is Workspace, not Server. .populate("server") will silently return null.
+
+8. Unused import in channelRoutes.ts
+typescript
+import { DeleteBucketCorsCommand } from "@aws-sdk/client-s3"; // ← remove this
+9. sendDirectMessage response is redundant
+After DirectMessage.create(), you do a separate findById with populate. That's fine, but make sure you always return res.status(201) (you do — just keep it consistent).
+
+Summary Table
+#	File	Issue	Severity
+1	dmSocket.ts / index.ts	Double connection handler	🔴 Critical
+2	channelController.ts	Missing return on 404	🔴 Critical
+3	messageController.ts	attachments.length crash	🔴 Critical
+4	directMessageRoutes.ts	No auth on GET	🟡 Security
+5	Both delete routes	No ownership check	🟡 Security
+6	dmSocket.ts	socketsJoin race condition	🟡 Logic
+7	channel.ts model	Wrong ref name	🟠 Bug
+8	channelRoutes.ts	Unused AWS import	🟠 Minor
+Fix #1, #2, #3 first — they'll cause runtime crashes in production.
+
+i have fixed all the errors does any way i could check this is working or not
+
+10:12 PM
+Yes! Here are the best ways to test your backend:
+
+Option 1: Postman / Thunder Client (Easiest for REST)
+Postman (standalone app) or Thunder Client (VS Code extension) let you test your REST endpoints visually.
+
+Test flow for your app:
+
+1. POST /auth/login          → get your JWT token
+2. POST /channels/           → create a channel
+3. POST /messages/           → send a message
+4. GET  /messages/channel/:channelId  → fetch messages
+5. POST /dm/:workspaceId/:user1/:user2 → send DM
+Set the token in headers:
+
+Authorization: Bearer <your_token>
+Option 2: Test Socket.IO with a Simple HTML File
+Create a test.html file locally and open it in your browser:
+
+html
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="log"></div>
+  <script>
+    const token = "YOUR_JWT_TOKEN_HERE";
+
+    const socket = io("http://localhost:8000", {
+      auth: { token },
+      transports: ["websocket"]
+    });
+
+    function log(msg) {
+      document.getElementById("log").innerHTML += `<p>${msg}</p>`;
+      console.log(msg);
+    }
+
+    // Connection
+    socket.on("connect", () => log("✅ Connected: " + socket.id));
+    socket.on("unauthorized", (msg) => log("❌ Unauthorized: " + msg));
+    socket.on("error", (msg) => log("❌ Error: " + msg));
+
+    // Join a channel
+    socket.emit("join_channel", "YOUR_CHANNEL_ID");
+    socket.on("joined_channel", (id) => log("✅ Joined channel: " + id));
+
+    // Send a message
+    socket.emit("send_message", {
+      channelId: "YOUR_CHANNEL_ID",
+      content: "Hello from test!"
+    });
+    socket.on("receive_message", (msg) => log("📨 Message: " + JSON.stringify(msg)));
+
+    // Test DM
+    socket.emit("send_dm", {
+      receiverId: "OTHER_USER_ID",
+      workspaceId: "YOUR_WORKSPACE_ID",
+      content: "Hey! DM test"
+    });
+    socket.on("receive_dm", (msg) => log("💬 DM: " + JSON.stringify(msg)));
+
+    // Typing indicators
+    socket.emit("typing", "YOUR_CHANNEL_ID");
+    socket.on("user_typing", (data) => log("✏️ Typing: " + JSON.stringify(data)));
+  </script>
+</body>
+</html>
+Option 3: Write Automated Tests with Jest + Supertest
+Install:
+
+bash
+npm install -D jest supertest @types/jest @types/supertest ts-jest
+Example test file tests/messages.test.ts:
+
+typescript
+import request from "supertest";
+import app from "../src/app";
+
+let token: string;
+let channelId: string;
+
+beforeAll(async () => {
+  // Login to get token
+  const res = await request(app)
+    .post("/auth/login")
+    .send({ email: "test@test.com", password: "password123" });
+
+  token = res.body.accessToken;
+});
+
+describe("Messages", () => {
+  it("should create a channel", async () => {
+    const res = await request(app)
+      .post("/channels/")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "general", type: "text", workspaceId: "YOUR_WORKSPACE_ID" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe("general");
+    channelId = res.body._id;
+  });
+
+  it("should send a message", async () => {
+    const res = await request(app)
+      .post("/messages/")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ channelId, content: "Hello world" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content).toBe("Hello world");
+  });
+
+  it("should reject empty message", async () => {
+    const res = await request(app)
+      .post("/messages/")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ channelId, content: "", attachments: [] });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("should get channel messages", async () => {
+    const res = await request(app)
+      .get(`/messages/channel/${channelId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+});
+Run with:
+
+bash
+npx jest --watchAll
+Recommended Order
+1. Start your server          → npm run dev
+2. Use Postman to test REST   → make sure auth, channels, messages work
+3. Open test.html in browser  → verify socket connection and events
+4. Write Jest tests           → for long-term reliability
+Postman + the HTML file together will cover 90% of what you need to verify right now. Start there before setting up Jest.
+
+give a index file through which i could check this socket working
+
+10:16 PM
+Here's a comprehensive test HTML file:
+
+
+Created a file, read a file
+Created a file, read a file
+Download and open it directly in your browser. Here's how to use it:
+
+Setup:
+
+Start your server (npm run dev)
+Paste your JWT token in the sidebar (get it from your login endpoint)
+Hit Connect — you'll see the dot turn green and [connect] in the log
+Testing channel chat:
+
+Paste a channel ID → click Join Channel
+Type a message → Send Message
+Open a second browser tab with a different token to see receive_message fire in real time
+Testing DMs:
+
+Paste a workspace ID → Join Workspace
+Paste the receiver's user ID + message → Send DM
+Again, open a second tab logged in as the receiver to see receive_dm arrive
+Custom emit box at the bottom lets you fire any event manually, e.g. emit join_server with just a workspace ID string.
+
+The Event Log tab shows everything color-coded — green for connections, blue for received, purple for sent, red for errors. The Messages and DMs tabs show a cleaner chat view.
+
+Socket test
+Code · HTML 
+accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGYyNTk0N2M5NTEwNmRhMjBlYjMwZmMiLCJlbWFpbCI6Im1yLnJhamt1bWFyMzU3OUBnbWFpbC5jb20iLCJpYXQiOjE3NzU0MDc2NDgsImV4cCI6MTc3NTQzNjQ0OH0.NfCejATgVRGsjj4-emUTV5pxYxduPm31diQ9MknDm-o; Path=/; HttpOnly; Expires=Mon, 06 Apr 2026 16:47:28 GMT; after login i got this in cookies and 
+
+import UserModel from "../models/user";
+import { ApiError } from "../utils/ApiError";
+import { asyncHandler } from "../utils/asyncHandler";
+
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { Request, Response, NextFunction } from "express";
+
+import { IUser } from "../models/user";
+
+declare module "express-serve-static-core" {
+  interface Request {
+    user?: IUser;
+  }
+}
+
+interface DecodedToken extends JwtPayload {
+  _id: string;
+}
+
+export const verifyJWT = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      console.log("I have been hitted");
+
+      const token =
+        req.cookies?.accessToken ||
+        req.header("Authorization")?.replace("Bearer ", "");
+
+      if (!token) {
+        throw new ApiError(401, "Access token missing");
+      }
+
+      let decodedToken: DecodedToken;
+
+      try {
+        const verified = jwt.verify(
+          token,
+          process.env.ACCESS_TOKEN_SECRET as string
+        ) as unknown;
+        decodedToken = verified as DecodedToken;
+
+        if (!decodedToken._id) {
+          throw new ApiError(401, "Token missing user ID");
+        }
+      } catch (err: any) {
+        if (err.name === "TokenExpiredError") {
+          throw new ApiError(401, "JWT expired");
+        } else {
+          throw new ApiError(401, "Invalid token");
+        }
+      }
+
+      const user = await UserModel.findById(decodedToken._id).select(
+        "-password -refreshToken"
+      );
+
+      if (!user) {
+        throw new ApiError(401, "User not found");
+      }
+
+      req.user = user;
+
+      next();
+    } catch (error) {
+      throw new ApiError(401, "Invalid access token");
+    }
+  }
+);import { Request,Response,NextFunction, CookieOptions } from "express";
+import { ApiError } from "../utils/ApiError";
+import jwt, { JwtPayload } from "jsonwebtoken";
+
+ export const generateWorkspaceToken = (workspaceId: string, userId: string) => {
+  return jwt.sign(
+    { workspaceId, userId },
+    process.env.WORKSPACE_JWT_SECRET as string,
+    { expiresIn: 60*30*60*24 }
+  );
+};
+
+const isProduction = process.env.NODE_ENV === "production";
+
+export const workspaceCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? "none" : "lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: "/",
+};
+
+interface WorkspaceJwtPayload extends JwtPayload{
+  workspaceId: string;
+  userId: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      workspaceUser?: WorkspaceJwtPayload;
+    }
+  }
+}
+
+export const verifyWorkspaceToken = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { workspaceId } = req.params; 
+    if (!workspaceId) throw new ApiError(400, "Workspace ID required");
+
+    const cookieName = `workspaceToken_${workspaceId}`;
+    const token = req.cookies[cookieName];
+    if (!token) throw new ApiError(401, "Workspace token missing");
+
+    const decoded = jwt.verify(
+      token,
+      process.env.WORKSPACE_JWT_SECRET!
+    ) as WorkspaceJwtPayload;
+
+    req.workspaceUser = decoded;
+    next();
+  } catch (err) {
+    next(new ApiError(401, "Invalid or expired workspace token"));
+  }
+};and these are my middlewares
+Show more
+10:19 PM
+Looking at your setup, the token is HttpOnly so JavaScript can't read it — but your verifyJWT middleware already handles this correctly since it reads from req.cookies?.accessToken. The issue is just how you're sending it in the test tool.
+
+The Problem
+Your socket test HTML uses auth: { token } where you manually paste the token. But your actual app sets it as an HttpOnly cookie — so in Postman and the socket tester, you need to handle this differently.
+
+Fix 1: Postman — Test REST Endpoints
+Since the cookie is HttpOnly, Postman can handle it automatically:
+
+1. POST http://localhost:8000/auth/login
+   → Postman auto-stores the cookie
+
+2. All subsequent requests will send the cookie automatically
+   (make sure "Automatically follow redirects" and cookie jar is ON)
+Alternatively, extract the token value from the cookie string you shared:
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGYyNTk0N2M5NTEwNmRhMjBlYjMwZmMiLCJlbWFpbCI6Im1yLnJhamt1bWFyMzU3OUBnbWFpbC5jb20iLCJpYXQiOjE3NzU0MDc2NDgsImV4cCI6MTc3NTQzNjQ0OH0.NfCejATgVRGsjj4-emUTV5pxYxduPm31diQ9MknDm-o
+And set it as a header:
+
+Authorization: Bearer eyJhbGciOiJIUzI1...
+Fix 2: Socket Tester — Pass Token Directly
+In the HTML test file, paste just the token value (not the full cookie string) into the JWT field:
+
+✅ Correct — paste this:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGYy...
+
+❌ Wrong — don't paste this:
+accessToken=eyJhbGci...; Path=/; HttpOnly;
+Your getTokenFromSocket already handles both cookie and auth.token:
+
+typescript
+// This runs first — works when you paste token in the HTML tester
+const authToken = socket.handshake.auth?.token  // ← HTML tester uses this
+
+// This runs as fallback — works when browser sends cookie automatically
+const cookies = cookie.parse(cookieHeader);
+let token = cookies.accessToken  // ← real frontend uses this
+Fix 3: Update Socket Tester to Also Support Cookie Mode
+Update the connect function in the HTML file to support sending as a cookie too:
+
+javascript
+socket = io(url, {
+  auth: { token },           // ← for manual token paste
+  withCredentials: true,     // ← sends HttpOnly cookie automatically if on same origin
+  transports: ['websocket', 'polling'],
+});
+withCredentials: true is already in the file — so if you open the HTML from the same origin as your server (e.g. serve it from Express), cookies will be sent automatically without pasting anything.
+
+Quick Test Right Now
+Since your token expires at Mon, 06 Apr 2026 16:47:28 GMT, you need a fresh token. Do this:
+
+1. Login again → POST /auth/login
+2. Copy the raw token value from the response or cookie
+3. Paste it into the JWT field in the socket tester
+4. Hit Connect
+Also note — your token expiry is only 8 hours (iat to exp difference), so you'll need to re-login each time it expires during testing.
+
+give me updated html fiel
+
+10:20 PM
+
+Created 2 files, ran a command, read a file
+Created 2 files, ran a command, read a file
+Key updates in this version:
+
+Auto-login flow — fill in email + password, click "Login & Get Token" and it hits your /auth/login endpoint, pulls the token from the response body automatically, and pre-fills everything ready to connect.
+
+Smart cookie parser — the token input now accepts both formats:
+
+✅ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...       ← bare token
+✅ accessToken=eyJhbGci...; Path=/; HttpOnly;      ← full cookie string (what you pasted)
+It strips the cookie wrapper and extracts just the JWT before sending it to the socket.
+
+How to use right now:
+
+Open the file in your browser
+Set Server URL to http://localhost:8000
+Enter your email + password → click Login & Get Token
+Click Connect — the green dot should light up
+Paste a Channel ID → Join Channel → Send Message
+Socket test
+Code · HTML 
+Cannot redeclare block-scoped variable 'socket'.'
+
+10:27 PM
+The HTML file has a conflict because socket is being declared twice somewhere. Since you're using it as a plain HTML file, the fix is simple — the variable just needs to be declared once at the top with let.
+
+
+Find duplicate socket declarations
+Find duplicate socket declarations
+The file itself is fine — only one declaration. This error is coming from your TypeScript backend conflicting with the browser's global socket variable when the HTML is being served/compiled.
+
+The real fix is to wrap everything in an IIFE so no variables leak to global scope:
+
+
+Ran a command, edited a file
+Ran a command, edited a file
+Now find the closing </script> and close the IIFE before it:
+
+
+Ran 2 commands, edited a file, read a file
+Ran 2 commands, edited a file, read a file
+The fix wraps all the JS in an IIFE ((function() { ... })()) so variables like socket, activeToken etc. are scoped privately and can't clash with anything else. Then at the bottom it explicitly re-attaches all the button handler functions to window since onclick="..." in HTML needs them to be globally accessible. Should work cleanly now.
+
+Socket test
+Code · HTML 
+
+
+
+
+Claude is AI and can make mistakes. Please double-check responses.
+Socket test · HTML
+Copy
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Socket.IO Tester</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #0f0f0f; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+ 
+    #sidebar { width: 280px; min-width: 280px; background: #1a1a1a; border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; padding: 14px; gap: 10px; overflow-y: auto; }
+    
+    h2 { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 2px; }
+    
+    input, select, textarea { width: 100%; background: #111; border: 1px solid #2a2a2a; color: #e0e0e0; border-radius: 6px; padding: 7px 10px; font-size: 12px; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: #444; }
+    label { font-size: 11px; color: #777; display: block; margin-bottom: 3px; }
+    .field { display: flex; flex-direction: column; gap: 3px; }
+ 
+    button { width: 100%; padding: 7px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: opacity 0.15s; }
+    button:hover { opacity: 0.82; }
+    button:active { opacity: 0.65; }
+    .btn-green  { background: #22c55e; color: #000; }
+    .btn-red    { background: #ef4444; color: #fff; }
+    .btn-blue   { background: #3b82f6; color: #fff; }
+    .btn-purple { background: #a855f7; color: #fff; }
+    .btn-slate  { background: #334155; color: #cbd5e1; }
+    .btn-amber  { background: #d97706; color: #fff; }
+    .btn-row    { display: flex; gap: 6px; }
+    .btn-row button { flex: 1; }
+ 
+    .divider { border: none; border-top: 1px solid #222; margin: 2px 0; }
+ 
+    #status-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: #111; border: 1px solid #2a2a2a; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; flex-shrink: 0; transition: background 0.3s; }
+    .dot.on { background: #22c55e; }
+    #socket-id { font-size: 10px; color: #555; margin-left: auto; font-family: monospace; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ 
+    #login-box { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+    #login-box .title { font-size: 11px; color: #888; }
+    #token-display { font-size: 10px; font-family: monospace; color: #22c55e; word-break: break-all; max-height: 48px; overflow: hidden; background: #0a0a0a; border-radius: 4px; padding: 4px 6px; display: none; }
+ 
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #tabs { display: flex; border-bottom: 1px solid #222; background: #111; }
+    .tab { padding: 9px 16px; font-size: 12px; cursor: pointer; color: #666; border-bottom: 2px solid transparent; }
+    .tab.active { color: #e0e0e0; border-bottom-color: #3b82f6; }
+    .tab:hover:not(.active) { color: #aaa; }
+ 
+    .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .panel.active { display: flex; }
+ 
+    #log-panel { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; }
+    .log-entry { font-size: 11px; font-family: monospace; border-radius: 5px; padding: 5px 9px; border-left: 3px solid transparent; }
+    .log-entry.info    { background: #0d1f0d; border-color: #22c55e; color: #86efac; }
+    .log-entry.error   { background: #1f0d0d; border-color: #ef4444; color: #fca5a5; }
+    .log-entry.warn    { background: #1f1a0a; border-color: #f59e0b; color: #fcd34d; }
+    .log-entry.receive { background: #0d1520; border-color: #3b82f6; color: #93c5fd; }
+    .log-entry.send    { background: #16091f; border-color: #a855f7; color: #d8b4fe; }
+    .log-entry .time   { color: #444; margin-right: 6px; }
+    .log-entry .ev     { font-weight: bold; margin-right: 5px; }
+    .log-entry pre     { white-space: pre-wrap; word-break: break-all; margin-top: 3px; font-size: 10px; opacity: 0.8; }
+ 
+    #input-bar { border-top: 1px solid #222; padding: 10px 14px; display: flex; gap: 6px; background: #111; }
+    #custom-event { width: 130px; flex-shrink: 0; }
+    #custom-payload { flex: 1; }
+    #send-custom { width: auto; padding: 7px 14px; white-space: nowrap; }
+ 
+    .chat-wrap { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .chat-msg { background: #151520; border-radius: 8px; padding: 9px 13px; border-left: 3px solid #3b82f6; }
+    .chat-msg.dm { border-left-color: #a855f7; }
+    .chat-msg .meta { font-size: 10px; color: #666; margin-bottom: 4px; }
+    .chat-msg .meta .sender { color: #60a5fa; font-weight: 600; }
+    .chat-msg .meta .receiver { color: #a78bfa; font-weight: 600; }
+    .chat-msg .body { font-size: 13px; color: #e0e0e0; }
+    .chat-msg .att { font-size: 10px; color: #666; margin-top: 3px; }
+ 
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+  </style>
+</head>
+<body>
+ 
+<div id="sidebar">
+ 
+  <h2>1. Login to get token</h2>
+  <div id="login-box">
+    <div class="title">Auto-login — extracts your token</div>
+    <div class="field"><label>Server URL</label><input id="server-url" value="http://localhost:8000" /></div>
+    <div class="field"><label>Email</label><input id="login-email" type="email" placeholder="you@example.com" /></div>
+    <div class="field"><label>Password</label><input id="login-pass" type="password" placeholder="••••••••" /></div>
+    <button class="btn-amber" onclick="doLogin()">Login &amp; Get Token</button>
+    <div id="token-display"></div>
+  </div>
+ 
+  <div class="field">
+    <label>— or paste token / full cookie string —</label>
+    <input id="token" placeholder="eyJhbGci...  or  accessToken=eyJ..." />
+  </div>
+ 
+  <div id="status-bar">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Disconnected</span>
+    <span id="socket-id"></span>
+  </div>
+ 
+  <div class="btn-row">
+    <button class="btn-green" onclick="connectSocket()">Connect</button>
+    <button class="btn-red"   onclick="disconnectSocket()">Disconnect</button>
+  </div>
+ 
+  <hr class="divider"/>
+  <h2>2. Channel Chat</h2>
+  <div class="field"><label>Channel ID</label><input id="channel-id" placeholder="MongoDB ObjectId" /></div>
+  <button class="btn-blue" onclick="emit('join_channel', val('channel-id'))">Join Channel</button>
+  <div class="field"><label>Message</label><input id="msg-content" placeholder="Hello world..." /></div>
+  <button class="btn-blue" onclick="sendChannelMsg()">Send Message</button>
+  <div class="btn-row">
+    <button class="btn-slate" onclick="emit('typing', val('channel-id'))">Typing</button>
+    <button class="btn-slate" onclick="emit('stop_typing', val('channel-id'))">Stop Typing</button>
+  </div>
+  <button class="btn-slate" onclick="emit('leave_channel', val('channel-id'))">Leave Channel</button>
+ 
+  <hr class="divider"/>
+  <h2>3. Direct Messages</h2>
+  <div class="field"><label>Workspace ID</label><input id="workspace-id" placeholder="MongoDB ObjectId" /></div>
+  <button class="btn-purple" onclick="emit('join_workspace', val('workspace-id'))">Join Workspace</button>
+  <div class="field"><label>Receiver User ID</label><input id="receiver-id" placeholder="MongoDB ObjectId" /></div>
+  <div class="field"><label>DM Message</label><input id="dm-content" placeholder="Hey there..." /></div>
+  <button class="btn-purple" onclick="sendDM()">Send DM</button>
+  <div class="btn-row">
+    <button class="btn-slate" onclick="emit('dm_typing', val('receiver-id'))">DM Typing</button>
+    <button class="btn-slate" onclick="emit('dm_stop_typing', val('receiver-id'))">DM Stop</button>
+  </div>
+ 
+  <hr class="divider"/>
+  <button class="btn-slate" onclick="clearAll()">Clear All Logs</button>
+ 
+</div>
+ 
+<div id="main">
+  <div id="tabs">
+    <div class="tab active" onclick="switchTab(0)">Event Log</div>
+    <div class="tab"        onclick="switchTab(1)">Channel Messages</div>
+    <div class="tab"        onclick="switchTab(2)">Direct Messages</div>
+  </div>
+ 
+  <div class="panel active" id="tab-0">
+    <div id="log-panel"></div>
+    <div id="input-bar">
+      <input id="custom-event"   placeholder="event name" value="join_server" />
+      <input id="custom-payload" placeholder='JSON or plain string payload' />
+      <button class="btn-blue" id="send-custom" onclick="sendCustom()">Emit ↗</button>
+    </div>
+  </div>
+ 
+  <div class="panel" id="tab-1">
+    <div class="chat-wrap" id="messages-list"></div>
+  </div>
+ 
+  <div class="panel" id="tab-2">
+    <div class="chat-wrap" id="dms-list"></div>
+  </div>
+</div>
+ 
+<script>
+(function() {
+'use strict';
+let socket = null;
+let activeToken = '';
+ 
+const val = id => document.getElementById(id).value.trim();
+const el  = id => document.getElementById(id);
+const ts  = () => new Date().toLocaleTimeString('en-US', { hour12: false });
+ 
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+ 
+/* Extract raw JWT from a pasted cookie string like:
+   "accessToken=eyJ...; Path=/; HttpOnly"  or just  "eyJ..." */
+function extractToken(raw) {
+  if (!raw) return '';
+  raw = raw.trim();
+  // if it looks like a cookie string
+  if (raw.includes('=')) {
+    for (const part of raw.split(';')) {
+      const [k, ...rest] = part.trim().split('=');
+      if (k.trim().toLowerCase() === 'accesstoken') {
+        return rest.join('=').trim();
+      }
+    }
+    // fallback: value of first pair
+    const first = raw.split(';')[0].trim();
+    if (first.includes('=')) return first.split('=').slice(1).join('=').trim();
+  }
+  return raw; // already a bare token
+}
+ 
+/* ── LOGIN ── */
+async function doLogin() {
+  const base  = val('server-url');
+  const email = val('login-email');
+  const pass  = val('login-pass');
+  if (!email || !pass) return log('error', 'login', 'Email and password required');
+ 
+  log('info', 'login', `POST ${base}/auth/login`);
+  try {
+    const res  = await fetch(`${base}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, password: pass }),
+    });
+    const data = await res.json();
+ 
+    if (!res.ok) {
+      log('error', 'login-failed', data.message || data.error || `HTTP ${res.status}`);
+      return;
+    }
+ 
+    log('receive', 'login-response', data);
+ 
+    // search common token field names
+    const token =
+      data.accessToken     ||
+      data.token           ||
+      data.data?.accessToken ||
+      data.data?.token     ||
+      data.user?.accessToken ||
+      '';
+ 
+    if (!token) {
+      log('warn', 'login', 'Could not auto-extract token — check field names above and paste manually');
+      return;
+    }
+ 
+    setToken(token);
+    log('info', 'login', `Token extracted (${token.slice(0,20)}...) — ready to connect`);
+  } catch (err) {
+    log('error', 'login', err.message);
+  }
+}
+ 
+function setToken(token) {
+  activeToken = token;
+  el('token').value = token;
+  const d = el('token-display');
+  d.style.display = 'block';
+  d.textContent = token.slice(0, 90) + (token.length > 90 ? '…' : '');
+}
+ 
+/* ── SOCKET ── */
+function connectSocket() {
+  if (socket) socket.disconnect();
+ 
+  const url   = val('server-url');
+  const raw   = val('token') || activeToken;
+  const token = extractToken(raw);
+ 
+  if (!token) return log('error', 'connect', 'No token — login first or paste token');
+ 
+  setToken(token);
+ 
+  socket = io(url, {
+    auth: { token },
+    withCredentials: true,
+    transports: ['websocket', 'polling'],
+  });
+ 
+  socket.on('connect',       ()     => { setStatus(true, socket.id); log('info', 'connect', `Socket ID: ${socket.id}`); });
+  socket.on('disconnect',    reason => { setStatus(false);           log('warn', 'disconnect', reason); });
+  socket.on('connect_error', err    => log('error', 'connect_error', err.message));
+ 
+  socket.on('unauthorized',  msg => log('error', 'unauthorized',  msg));
+  socket.on('error',         msg => log('error', 'server-error',  msg));
+ 
+  socket.on('joined_channel',   id  => log('info',    'joined_channel', id));
+  socket.on('left_channel',     id  => log('warn',    'left_channel',   id));
+  socket.on('joined_server',    id  => log('info',    'joined_server',  id));
+  socket.on('receive_message',  msg => { log('receive', 'receive_message', msg); addMsg(msg, false); });
+  socket.on('user_typing',      d   => log('warn',    'user_typing',    d));
+  socket.on('user_stop_typing', d   => log('warn',    'user_stop_typing', d));
+ 
+  socket.on('joined_workspace',    id  => log('info',    'joined_workspace', id));
+  socket.on('receive_dm',          msg => { log('receive', 'receive_dm', msg); addMsg(msg, true); });
+  socket.on('dm_user_typing',      d   => log('warn',    'dm_user_typing', d));
+  socket.on('dm_user_stop_typing', d   => log('warn',    'dm_user_stop_typing', d));
+ 
+  log('info', 'connecting', url);
+}
+ 
+function disconnectSocket() {
+  if (socket) { socket.disconnect(); socket = null; }
+  setStatus(false);
+}
+ 
+function emit(event, payload) {
+  if (!socket?.connected) return log('error', 'not-connected', 'Connect first');
+  socket.emit(event, payload);
+  log('send', event, payload);
+}
+ 
+function sendChannelMsg() {
+  const channelId = val('channel-id');
+  const content   = val('msg-content');
+  if (!channelId) return log('error', 'validation', 'Channel ID required');
+  if (!content)   return log('error', 'validation', 'Message content required');
+  emit('send_message', { channelId, content, attachments: [] });
+}
+ 
+function sendDM() {
+  const receiverId  = val('receiver-id');
+  const workspaceId = val('workspace-id');
+  const content     = val('dm-content');
+  if (!receiverId)  return log('error', 'validation', 'Receiver ID required');
+  if (!workspaceId) return log('error', 'validation', 'Workspace ID required');
+  if (!content)     return log('error', 'validation', 'Message content required');
+  emit('send_dm', { receiverId, workspaceId, content, attachments: [] });
+}
+ 
+function sendCustom() {
+  const event = val('custom-event');
+  const raw   = val('custom-payload');
+  if (!event) return;
+  let payload;
+  try { payload = JSON.parse(raw); } catch { payload = raw || undefined; }
+  emit(event, payload);
+}
+ 
+/* ── UI ── */
+function setStatus(on, id) {
+  el('dot').className           = 'dot' + (on ? ' on' : '');
+  el('status-text').textContent = on ? 'Connected' : 'Disconnected';
+  el('socket-id').textContent   = on && id ? id : '';
+}
+ 
+function log(type, event, data) {
+  const panel = el('log-panel');
+  const div   = document.createElement('div');
+  div.className = `log-entry ${type}`;
+  let html = `<span class="time">${ts()}</span><span class="ev">[${escHtml(event)}]</span>`;
+  if (data !== undefined) {
+    const pretty = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    html += `<pre>${escHtml(pretty)}</pre>`;
+  }
+  div.innerHTML = html;
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+}
+ 
+function addMsg(msg, isDM) {
+  const list   = el(isDM ? 'dms-list' : 'messages-list');
+  const sender = msg.sender?.username || msg.sender || 'unknown';
+  const div    = document.createElement('div');
+  div.className = `chat-msg${isDM ? ' dm' : ''}`;
+  div.innerHTML = `
+    <div class="meta">
+      ${ts()} &nbsp;
+      <span class="sender">${escHtml(sender)}</span>
+      ${isDM ? ' → <span class="receiver">' + escHtml(msg.receiver?.username || msg.receiver || '') + '</span>' : ''}
+    </div>
+    <div class="body">${escHtml(msg.content || '')}</div>
+    ${msg.attachments?.length ? `<div class="att">📎 ${msg.attachments.length} attachment(s)</div>` : ''}
+  `;
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+ 
+function clearAll() {
+  ['log-panel', 'messages-list', 'dms-list'].forEach(id => el(id).innerHTML = '');
+}
+ 
+function switchTab(idx) {
+  document.querySelectorAll('.tab').forEach((t, i)   => t.classList.toggle('active', i === idx));
+  document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('active', i === idx));
+}
+ 
+/* expose button handlers to global scope since onclick="" needs them */
+window.doLogin         = doLogin;
+window.connectSocket   = connectSocket;
+window.disconnectSocket= disconnectSocket;
+window.emit            = emit;
+window.sendChannelMsg  = sendChannelMsg;
+window.sendDM          = sendDM;
+window.sendCustom      = sendCustom;
+window.clearAll        = clearAll;
+window.switchTab       = switchTab;
+})();
+</script>
+</body>
+</html>
+ 

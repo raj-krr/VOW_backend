@@ -30,7 +30,7 @@ export const deleteChannel = async (req:Request ,res:Response) => {
     }
     const deletedChannel = await Channel.findByIdAndDelete(channelId);
   if(!deletedChannel){
-    res.status(404).json({success:false, message:"channel not found"})
+   return res.status(404).json({success:false, message:"channel not found"})
   }
   res.status(200).json({ success:true, message:"channel deleted successfully"});
   }catch(err:any){
