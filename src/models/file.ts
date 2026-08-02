@@ -3,7 +3,8 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IFile extends Document {
   filename: string;
   url: string;
-  s3FileId: string;
+  s3FileId?: string;
+  cloudinaryPublicId?: string;
   size: number;
   mimeType: string;
   workspace: mongoose.Schema.Types.ObjectId;
@@ -16,7 +17,8 @@ const fileSchema = new Schema<IFile>(
   {
     filename: { type: String, required: true },
     url: { type: String, required: true },
-    s3FileId: { type: String, required: true },
+    s3FileId: { type: String, required: false },
+    cloudinaryPublicId: { type: String, required: false },
     size: { type: Number, required: true },
     mimeType: { type: String, required: true },
 

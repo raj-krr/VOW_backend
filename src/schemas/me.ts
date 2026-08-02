@@ -1,28 +1,32 @@
 import { z } from "zod";
-import { noEmojisRegex, noEmojis } from "../utils/regex"; 
+import { noEmojisRegex, noEmojis } from "../utils/regex";
 
 export const updateMeSchema = z.object({
   fullName: z
     .string()
-    .min(3, "Full name must be at least 3 characters")
-    .max(20, "Full name must be less than 20 character")
-    .refine((v) => noEmojisRegex.test(v), noEmojis("Full name"))
-    .optional(),
+    .min(1, "Full name must be provided")
+    .max(100, "Full name must be less than 100 characters")
+    .refine((v) => !v || noEmojisRegex.test(v), noEmojis("Full name"))
+    .optional()
+    .or(z.literal("")),
 
   organisation: z
     .string()
-    .min(3, "Organisation name must be at least 3 characters")
-    .max(30, "orhanisation must be less than 30 character")
-    .refine((v) => noEmojisRegex.test(v), noEmojis("Organisation"))
-    .optional(),
+    .max(100, "Organisation must be less than 100 characters")
+    .refine((v) => !v || noEmojisRegex.test(v), noEmojis("Organisation"))
+    .optional()
+    .or(z.literal("")),
 
-  gender: z.enum(["male", "female", "other"]).optional(),
+  gender: z
+    .string()
+    .optional()
+    .or(z.literal("")),
 
   dob: z
     .string()
-    .refine((date) => {
-      const parsed = Date.parse(date);
-      return !isNaN(parsed);
-    }, { message: "Invalid date format. Use ISO format (YYYY-MM-DD)." })
-    .optional(),
+    .refine((date) => !date || !isNaN(Date.parse(date)), {
+      message: "Invalid date format. Use ISO format (YYYY-MM-DD).",
+    })
+    .optional()
+    .or(z.literal("")),
 });

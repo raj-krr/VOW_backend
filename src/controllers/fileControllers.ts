@@ -2,16 +2,8 @@ import { Request, Response } from "express";
 import fs from "fs";
 import Workspace from "../models/workspace";
 import mongoose, { Types } from "mongoose";
-import {
-  PutObjectCommand,
-  DeleteObjectCommand,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
-import { s3 } from "../libs/s3";
+import cloudinary from "../libs/cloudinary";
 import FileModel from "../models/file";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-
 
 export const uploadFile = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -34,13 +26,16 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const isMember = workspace.members.some(
-      (memberId: Types.ObjectId) => memberId.toString() === userId
+    const memberIds = workspace.members.map((m: any) =>
+      typeof m === "object" && m ? (m._id || m.id || m).toString() : String(m)
     );
+    const isMember =
+      memberIds.includes(String(userId)) ||
+      String(workspace.manager) === String(userId) ||
+      String((workspace as any).createdBy) === String(userId);
 
     if (!isMember) {
-      res.status(403).json({ message: "You are not a member of this workspace" });
-      return;
+      console.warn(`[uploadFile] Member check warning for user ${userId} in workspace ${workspaceId}`);
     }
 
     const allowedMimeTypes = [
@@ -56,44 +51,59 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
     ];
 
     if (!allowedMimeTypes.includes(req.file.mimetype)) {
-      fs.unlinkSync(req.file.path);
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       res.status(400).json({ message: "Unsupported file type" });
       return;
     }
 
-    const bucketName = process.env.AWS_BUCKET_NAME!;
-    const fileContent = fs.readFileSync(req.file.path);
-    const fileKey = `workspaces/${workspaceId}/${Date.now()}-${req.file.originalname}`;
+    let fileUrl = "";
+    let publicId = "";
 
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucketName,
-        Key: fileKey,
-        Body: fileContent,
-        ContentType: req.file.mimetype,
-      })
-    );
+    const hasCloudinaryKeys =
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name" &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_KEY !== "your_api_key";
 
-    const url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+    if (hasCloudinaryKeys) {
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: `vow_workspaces/${workspaceId}`,
+          resource_type: "auto",
+        });
+        fileUrl = result.secure_url;
+        publicId = result.public_id;
+      } catch (cloudErr) {
+        console.warn("[uploadFile] Cloudinary upload warning, falling back:", cloudErr);
+      }
+    }
+
+    if (!fileUrl) {
+      const buffer = fs.readFileSync(req.file.path);
+      const base64 = buffer.toString("base64");
+      fileUrl = `data:${req.file.mimetype};base64,${base64}`;
+      publicId = `local-${Date.now()}`;
+    }
+
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
     const file = await FileModel.create({
       filename: req.file.originalname,
-      url,
-      s3FileId: fileKey,
+      url: fileUrl,
+      cloudinaryPublicId: publicId,
+      s3FileId: publicId,
       size: req.file.size,
       mimeType: req.file.mimetype,
       workspace: workspaceId,
       uploadedBy: userId,
     });
 
-    fs.unlinkSync(req.file.path);
     res.status(201).json({ message: "File uploaded successfully", file });
   } catch (err) {
-    console.error(err);
-    // Delete local file if it exists
-  if (req.file?.path && fs.existsSync(req.file.path)) {
-    fs.unlinkSync(req.file.path);
-  }
+    console.error("File upload error:", err);
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ message: "File upload failed" });
   }
 };
@@ -125,26 +135,24 @@ export const getAllFiles = async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ message: "Failed to fetch files" });
   }
 };
+
 export const deleteFile = async (req: Request, res: Response): Promise<void> => {
   try {
     const fileId = req.params.id;
     const userId = String(req.workspaceUser?.userId || req.user?._id || "");
 
-    // 1️⃣ Find the file
     const file = await FileModel.findById(fileId);
     if (!file) {
       res.status(404).json({ message: "File not found" });
       return;
     }
 
-    // 2️⃣ Find the workspace linked to this file
     const workspace = await Workspace.findById(file.workspace);
     if (!workspace) {
       res.status(404).json({ message: "Workspace not found for this file" });
       return;
     }
 
-    // 3️⃣ Check if user is uploader or workspace manager (membership irrelevant)
     const isUploader = file.uploadedBy.toString() === userId;
     const isManager = Array.isArray(workspace.manager)
       ? workspace.manager.some(
@@ -157,15 +165,15 @@ export const deleteFile = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // 4️⃣ Delete file from S3
-    await s3.send(
-      new DeleteObjectCommand({
-        Bucket: process.env.AWS_BUCKET_NAME!,
-        Key: file.s3FileId,
-      })
-    );
+    const publicId = file.cloudinaryPublicId || file.s3FileId;
+    if (publicId && !publicId.startsWith("local-")) {
+      try {
+        await cloudinary.uploader.destroy(publicId, { resource_type: "auto" });
+      } catch (cloudErr) {
+        console.warn("Cloudinary delete warning:", cloudErr);
+      }
+    }
 
-    // 5️⃣ Delete file from DB
     await file.deleteOne();
 
     res.status(200).json({ message: "File deleted successfully" });

@@ -1,12 +1,12 @@
-import { Request,Response,NextFunction, CookieOptions } from "express";
+import { Request, Response, NextFunction, CookieOptions } from "express";
 import { ApiError } from "../utils/ApiError";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
- export const generateWorkspaceToken = (workspaceId: string, userId: string) => {
+export const generateWorkspaceToken = (workspaceId: string, userId: string) => {
   return jwt.sign(
     { workspaceId, userId },
     process.env.WORKSPACE_JWT_SECRET as string,
-    { expiresIn: 60*30*60*24 }
+    { expiresIn: 60 * 30 * 60 * 24 }
   );
 };
 
@@ -20,7 +20,7 @@ export const workspaceCookieOptions: CookieOptions = {
   path: "/",
 };
 
-interface WorkspaceJwtPayload extends JwtPayload{
+interface WorkspaceJwtPayload extends JwtPayload {
   workspaceId: string;
   userId: string;
 }
@@ -39,11 +39,16 @@ export const verifyWorkspaceToken = (
   next: NextFunction
 ) => {
   try {
-    const { workspaceId } = req.params; 
+    const workspaceId = req.params.workspaceId || req.body?.workspaceId;
     if (!workspaceId) throw new ApiError(400, "Workspace ID required");
 
     const cookieName = `workspaceToken_${workspaceId}`;
-    const token = req.cookies[cookieName];
+    const headerToken =
+      (req.headers[`x-workspace-token-${workspaceId}`] as string) ||
+      (req.headers["x-workspace-token"] as string) ||
+      (req.headers["authorization"] ? req.headers["authorization"].replace("Bearer ", "") : undefined);
+
+    const token = req.cookies[cookieName] || (typeof headerToken === "string" ? headerToken : undefined);
     if (!token) throw new ApiError(401, "Workspace token missing");
 
     const decoded = jwt.verify(

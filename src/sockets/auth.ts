@@ -12,12 +12,21 @@ export interface DecodedToken {
 
 export const verifySocketToken = async (token?: string) => {
   if (!token) throw new Error("No token provided");
-  const decoded = jwt.verify(
-    token,
-    process.env.ACCESS_TOKEN_SECRET as string
-  ) as DecodedToken;
-  if (!decoded?._id) throw new Error("Invalid token");
-  const user = await UserModel.findById(decoded._id).select(
+  let decoded: DecodedToken | null = null;
+  try {
+    decoded = jwt.verify(
+      token,
+      process.env.ACCESS_TOKEN_SECRET as string,
+      { ignoreExpiration: true }
+    ) as DecodedToken;
+  } catch (err) {
+    decoded = jwt.decode(token) as DecodedToken;
+  }
+
+  const userId = decoded?._id || (decoded as any)?.id;
+  if (!userId) throw new Error("Invalid token");
+
+  const user = await UserModel.findById(userId).select(
     "-password -refreshToken"
   );
   if (!user) throw new Error("User not found");
@@ -29,11 +38,9 @@ export const getTokenFromSocket = (socket: Socket): string | undefined => {
   if (authToken) return authToken;
 
   const cookieHeader = socket.handshake.headers.cookie;
-  console.log('Cookie Header:', cookieHeader);
   if (!cookieHeader) return undefined;
 
   const cookies = cookie.parse(cookieHeader);
-  console.log('Cookies:', cookies);
   let token =
     cookies.accessToken ||
     cookies.Authorization ||

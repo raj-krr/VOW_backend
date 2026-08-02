@@ -3,10 +3,7 @@ import UserModel, { IUser } from "../models/user";
 import { ApiError } from "../utils/ApiError";
 import fs from "fs";
 import path from "path";
-import {
-  PutObjectCommand
-} from "@aws-sdk/client-s3";
-import { s3 } from "../libs/s3";
+import cloudinary from "../libs/cloudinary";
 
 const sanitizeUser = (userDoc: IUser) => {
   const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
@@ -72,30 +69,39 @@ const sanitizeUser = (userDoc: IUser) => {
       "image/svg"
     ];
 
-if (!allowedMimeTypes.includes(req.file.mimetype)){
-  fs.unlinkSync(req.file.path);
-  res.status(400).json({message:"only image is used as profile photo"});
-  return;
-};
+    if (!allowedMimeTypes.includes(req.file.mimetype)){
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      res.status(400).json({message:"only image is used as profile photo"});
+      return;
+    }
 
-    const filePath = req.file.path;
-    const fileExt = path.extname(req.file.originalname);
-    const fileKey = `user-avatars/${userId}/profile-${fileExt}`;
+    let photoUrl = "";
 
-    // Upload to S3
-    const fileContent = fs.readFileSync(filePath);
-    const uploadParams = {
-      Bucket: process.env.AWS_BUCKET_NAME!,
-      Key: fileKey,
-      Body: fileContent,
-      ContentType: req.file.mimetype,
-    };
+    const hasCloudinaryKeys =
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name" &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_KEY !== "your_api_key";
 
-    await s3.send(new PutObjectCommand(uploadParams));
+    if (hasCloudinaryKeys) {
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: `user_avatars/${userId}`,
+          resource_type: "image",
+        });
+        photoUrl = result.secure_url;
+      } catch (cloudErr) {
+        console.warn("[uploadProfilePhoto] Cloudinary error, falling back:", cloudErr);
+      }
+    }
 
-    fs.unlinkSync(filePath);
+    if (!photoUrl) {
+      const buffer = fs.readFileSync(req.file.path);
+      const base64 = buffer.toString("base64");
+      photoUrl = `data:${req.file.mimetype};base64,${base64}`;
+    }
 
-    const photoUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,

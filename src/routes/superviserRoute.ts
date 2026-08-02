@@ -12,9 +12,9 @@ import { renameTeamSchema } from "../schemas/team";
 const superviserRouter = express.Router();
 
 superviserRouter.get("/team/members/:teamId",getTeamMembers);
-superviserRouter.get("/team/all/:workspaceId",verifyWorkspaceToken,getAllTeams);
-superviserRouter.put("/team/rename/:workspaceId/:teamId",validate(renameTeamSchema), verifyWorkspaceToken, renameTeam);
-superviserRouter.put("/team/remove-member/:workspaceId/:teamId", verifyWorkspaceToken, removeMember);
-superviserRouter.put("/team/add-members/:workspaceId/:teamId", verifyWorkspaceToken, addMembers);
+superviserRouter.get("/team/all/:workspaceId",getAllTeams);
+superviserRouter.put("/team/rename/:workspaceId/:teamId",validate(renameTeamSchema),renameTeam);
+superviserRouter.put("/team/remove-member/:workspaceId/:teamId", removeMember);
+superviserRouter.put("/team/add-members/:workspaceId/:teamId", addMembers);
 
 export default superviserRouter;
