@@ -29,20 +29,39 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use(
-  cors({
-    origin: [
-      process.env.FRONTEND_URL as string,
-      "http://localhost:5173",
-      "http://127.0.0.1:3000",
-      process.env.RENDER_URL as string,
-      process.env.FRONTEND_URL_PROD as string,
-      process.env.FRONTEND_URL_DEV as string,
-      "http://localhost:8000",
-    ],
-    credentials: true,
-  })
-);
+const allowedOrigins = [
+  "https://www.vow-org.me",
+  "https://vow-org.me",
+  "https://www.vow-live.me",
+  "https://vow-live.me",
+  "https://vow-pink.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      origin.includes("vow-org.me") ||
+      origin.includes("vow-live.me") ||
+      origin.includes("vercel.app") ||
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1")
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 
 // views
 app.set("view engine", "ejs");
