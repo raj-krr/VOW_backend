@@ -14,7 +14,7 @@ export const transporter = nodemailer.createTransport({
 });
 
 if (!isProduction && hasEmailConfig) {
-  transporter.verify((error) => {
+  transporter.verify((error: any) => {
     if (error) {
       console.warn("Email transporter verify failed (local dev):", error.message);
     } else {
