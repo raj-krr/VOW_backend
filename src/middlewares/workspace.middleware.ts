@@ -2,10 +2,12 @@ import { Request, Response, NextFunction, CookieOptions } from "express";
 import { ApiError } from "../utils/ApiError";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
+const WORKSPACE_JWT_SECRET = process.env.WORKSPACE_JWT_SECRET || process.env.JWT_SECRET || "vow_workspace_secret_fallback_key_2026";
+
 export const generateWorkspaceToken = (workspaceId: string, userId: string) => {
   return jwt.sign(
     { workspaceId, userId },
-    process.env.WORKSPACE_JWT_SECRET as string,
+    WORKSPACE_JWT_SECRET,
     { expiresIn: 60 * 30 * 60 * 24 }
   );
 };
@@ -53,7 +55,7 @@ export const verifyWorkspaceToken = (
 
     const decoded = jwt.verify(
       token,
-      process.env.WORKSPACE_JWT_SECRET!
+      WORKSPACE_JWT_SECRET
     ) as WorkspaceJwtPayload;
 
     req.workspaceUser = decoded;
