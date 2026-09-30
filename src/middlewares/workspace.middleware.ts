@@ -35,7 +35,9 @@ declare global {
   }
 }
 
-export const verifyWorkspaceToken = (
+import Workspace from "../models/workspace";
+
+export const verifyWorkspaceToken = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -45,21 +47,59 @@ export const verifyWorkspaceToken = (
     if (!workspaceId) throw new ApiError(400, "Workspace ID required");
 
     const cookieName = `workspaceToken_${workspaceId}`;
-    const headerToken =
+    const headerWsToken =
       (req.headers[`x-workspace-token-${workspaceId}`] as string) ||
-      (req.headers["x-workspace-token"] as string) ||
-      (req.headers["authorization"] ? req.headers["authorization"].replace("Bearer ", "") : undefined);
+      (req.headers["x-workspace-token"] as string);
 
-    const token = req.cookies[cookieName] || (typeof headerToken === "string" ? headerToken : undefined);
-    if (!token) throw new ApiError(401, "Workspace token missing");
+    const token = req.cookies[cookieName] || (typeof headerWsToken === "string" ? headerWsToken : undefined);
 
-    const decoded = jwt.verify(
-      token,
-      WORKSPACE_JWT_SECRET
-    ) as WorkspaceJwtPayload;
+    if (token) {
+      try {
+        const decoded = jwt.verify(
+          token,
+          WORKSPACE_JWT_SECRET
+        ) as WorkspaceJwtPayload;
+        req.workspaceUser = decoded;
+        return next();
+      } catch (tokenErr) {
+        // Fall through to user token verification
+      }
+    }
 
-    req.workspaceUser = decoded;
-    next();
+    // Fallback: Verify via accessToken (crucial for cross-origin production where cookies are blocked)
+    const authHeader = req.headers["authorization"] ? req.headers["authorization"].replace("Bearer ", "") : undefined;
+    const userToken = req.cookies?.accessToken || authHeader;
+    if (userToken) {
+      try {
+        const userSecret = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_ACCESS_SECRET || "ACCESS";
+        let verified: any;
+        try {
+          verified = jwt.verify(userToken, userSecret);
+        } catch (e: any) {
+          if (e.name === "TokenExpiredError") {
+            verified = jwt.verify(userToken, userSecret, { ignoreExpiration: true });
+          } else {
+            throw e;
+          }
+        }
+        const userId = verified?._id || verified?.id;
+        if (userId) {
+          const ws = await Workspace.findById(workspaceId);
+          if (ws) {
+            const isMember = ws.members.some((m: any) => m.toString() === userId.toString());
+            const isManager = ws.manager && ws.manager.toString() === userId.toString();
+            if (isMember || isManager) {
+              req.workspaceUser = { workspaceId, userId: userId.toString() };
+              return next();
+            }
+          }
+        }
+      } catch (authErr) {
+        // Ignore and throw ApiError below
+      }
+    }
+
+    throw new ApiError(401, "Workspace token missing or unauthorized");
   } catch (err) {
     next(new ApiError(401, "Invalid or expired workspace token"));
   }

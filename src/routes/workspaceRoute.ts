@@ -12,7 +12,7 @@ workspaceRouter.post("/create",validate(createWorkspaceSchema), verifyJWT, creat
 workspaceRouter.get("/details", verifyJWT, getWorkspaceDetails);
 
 workspaceRouter.delete("/:workspaceId",verifyJWT,deleteWorkspace);
-workspaceRouter.get("/:workspaceId/rejoin",rejoinWorkspace);
-workspaceRouter.get("/:workspaceId/members", workspaceMembers);
+workspaceRouter.get("/:workspaceId/rejoin", verifyJWT, rejoinWorkspace);
+workspaceRouter.get("/:workspaceId/members", verifyJWT, workspaceMembers);
 
 export default workspaceRouter;
