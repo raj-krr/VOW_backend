@@ -37,7 +37,9 @@ const sanitizeUser = (userDoc: IUser) => {
     const index = Array.from(userId.toString())
       .reduce((sum, c) => sum + c.charCodeAt(0), 0) % fileList.length;
 
-    const avatarUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${genderKey}/${fileList[index]}`;
+    const bucketName = process.env.AWS_BUCKET_NAME || "chitchatt-bucket";
+    const region = process.env.AWS_REGION || "ap-south-1";
+    const avatarUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${genderKey}/${fileList[index]}`;
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
