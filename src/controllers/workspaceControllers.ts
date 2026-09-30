@@ -33,21 +33,21 @@ await workspace.save();
     res.cookie(cookieName, workspaceToken, workspaceCookieOptions );
       
 
-    res.status(200).json({
-      success: true,
-      message: "Joined workspace successfully",
-      workspace,
-    });
-
-if (inviteEmails && inviteEmails.length > 0) {
+    if (inviteEmails && Array.isArray(inviteEmails) && inviteEmails.length > 0) {
       for (const email of inviteEmails) {
-       await sendInviteEmail(email, workspace.inviterName, workspace.workspaceName, workspace.inviteCode);
+        try {
+          await sendInviteEmail(email, workspace.inviterName, workspace.workspaceName, workspace.inviteCode);
+        } catch (mailErr) {
+          console.error(`Failed to send invite email to ${email}:`, mailErr);
+        }
       }
     }
 
-res.status(201).json({
+    res.status(201).json({
+      success: true,
       message: "Workspace created successfully",
       workspace,
+      workspaceToken,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
@@ -110,6 +110,12 @@ export const rejoinWorkspace = async (req: Request , res: Response): Promise<voi
   try {
     const userId = (req.user?._id as Types.ObjectId) || null;
     const { workspaceId } = req.params;
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized: user not authenticated" });
+      return;
+    }
+
     if (!workspaceId) {
       res.status(400).json({ success: false, message: "workspaceId not provided" });
       return;
@@ -122,7 +128,7 @@ export const rejoinWorkspace = async (req: Request , res: Response): Promise<voi
     }
 
     const workspaceIdStr = (workspace._id as Types.ObjectId).toString();
-    const effectiveUserId = userId ? userId.toString() : workspace.manager.toString();
+    const effectiveUserId = userId.toString();
     const workspaceToken = generateWorkspaceToken(workspaceIdStr, effectiveUserId);
 
     const cookieName = `workspaceToken_${workspaceIdStr}`;

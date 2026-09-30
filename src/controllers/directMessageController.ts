@@ -70,6 +70,16 @@ export const sendDirectMessage = async (req: Request, res: Response) => {
 export const getDirectMessages = async (req: Request, res: Response) => {
   try {
     const { workspaceId, user1, user2 } = req.params;
+    const currentUserId = (req as any).user?._id;
+
+    if (!currentUserId) {
+      return res.status(401).json({ error: "Unauthorized: user not found in token" });
+    }
+
+    // Authorization: only participants can read their own DMs
+    if (String(currentUserId) !== user1 && String(currentUserId) !== user2) {
+      return res.status(403).json({ error: "Forbidden: you are not part of this conversation" });
+    }
 
     if (!mongoose.Types.ObjectId.isValid(user1) || !mongoose.Types.ObjectId.isValid(user2)) {
       return res.json([]);
