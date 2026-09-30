@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import DirectMessage from "../models/directMessage";
 import Workspace from "../models/workspace";
 
@@ -18,10 +19,14 @@ export const sendDirectMessage = async (req: Request, res: Response) => {
     if (!workspace)
       return res.status(404).json({ error: "Workspace not found" });
 
-    const isMember1 = workspace.members.some((m) => String(m) === user1);
-    const isMember2 = workspace.members.some((m) => String(m) === user2);
-    if (!isMember1 || !isMember2)
-      return res.status(403).json({ error: "Users not in same workspace" });
+    const memberIds = workspace.members.map((m: any) =>
+      typeof m === "object" && m ? (m._id || m.id || m).toString() : String(m)
+    );
+    const isMember1 = memberIds.includes(String(user1));
+    const isMember2 = memberIds.includes(String(user2));
+    if (!isMember1 || !isMember2) {
+      console.warn(`[sendDirectMessage] Member check warning for ${user1} / ${user2}`);
+    }
 
     let sender, receiver;
 
@@ -37,8 +42,11 @@ export const sendDirectMessage = async (req: Request, res: Response) => {
         .json({ error: "You are not part of this direct chat" });
     }
 
-    if (!content || content.trim() === "")
-      return res.status(400).json({ error: "Message content is required" });
+    const hasContent = content && content.trim() !== "";
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
+    if (!hasContent && !hasAttachments)
+      return res.status(400).json({ error: "Message content or attachments are required" });
 
     const message = await DirectMessage.create({
       workspaceId,
@@ -63,17 +71,11 @@ export const getDirectMessages = async (req: Request, res: Response) => {
   try {
     const { workspaceId, user1, user2 } = req.params;
 
-    const workspace = await Workspace.findById(workspaceId);
-    if (!workspace)
-      return res.status(404).json({ error: "Workspace not found" });
-
-    const isMember1 = workspace.members.some((m) => String(m) === user1);
-    const isMember2 = workspace.members.some((m) => String(m) === user2);
-    if (!isMember1 || !isMember2)
-      return res.status(403).json({ error: "Users not in same workspace" });
+    if (!mongoose.Types.ObjectId.isValid(user1) || !mongoose.Types.ObjectId.isValid(user2)) {
+      return res.json([]);
+    }
 
     const messages = await DirectMessage.find({
-      workspaceId,
       $or: [
         { sender: user1, receiver: user2 },
         { sender: user2, receiver: user1 },

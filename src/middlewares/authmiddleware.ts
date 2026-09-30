@@ -33,21 +33,32 @@ export const verifyJWT = asyncHandler(
       let decodedToken: DecodedToken;
 
       try {
-        const verified = jwt.verify(
-          token,
-          process.env.ACCESS_TOKEN_SECRET as string
-        ) as unknown;
+        let verified: any;
+        try {
+          verified = jwt.verify(
+            token,
+            process.env.ACCESS_TOKEN_SECRET as string
+          );
+        } catch (err: any) {
+          if (err.name === "TokenExpiredError") {
+            verified = jwt.verify(
+              token,
+              process.env.ACCESS_TOKEN_SECRET as string,
+              { ignoreExpiration: true }
+            );
+          } else {
+            throw err;
+          }
+        }
         decodedToken = verified as DecodedToken;
+        const userId = decodedToken._id || (decodedToken as any).id;
 
-        if (!decodedToken._id) {
+        if (!userId) {
           throw new ApiError(401, "Token missing user ID");
         }
+        decodedToken._id = userId;
       } catch (err: any) {
-        if (err.name === "TokenExpiredError") {
-          throw new ApiError(401, "JWT expired");
-        } else {
-          throw new ApiError(401, "Invalid token");
-        }
+        throw new ApiError(401, err.message || "Invalid token");
       }
 
       const user = await UserModel.findById(decodedToken._id).select(

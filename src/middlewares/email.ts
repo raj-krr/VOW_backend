@@ -37,17 +37,25 @@ export const welcomeEmail = async (email: string, username: string): Promise<voi
 
 //reset password email
 export const sendResetOtpEmail = async (email: string, otp: string) => {
-  await transporter.sendMail({
-    from: `"VOW App" <${process.env.EMAIL}>`,
-    to: email,
-    subject: "Password Reset OTP",
-    html: `
-      <h2>Reset Your Password</h2>
-      <p>Your OTP for password reset is:</p>
-      <h1 style="letter-spacing:3px">${otp}</h1>
-      <p>This OTP will expire in 2 minutes.</p>
-    `,
-  });
+  try {
+    if (!process.env.EMAIL || !process.env.PASS) {
+      console.log(`[local OTP] Reset OTP for ${email}: ${otp}`);
+      return;
+    }
+    await transporter.sendMail({
+      from: `"VOW App" <${process.env.EMAIL}>`,
+      to: email,
+      subject: "Password Reset OTP",
+      html: `
+        <h2>Reset Your Password</h2>
+        <p>Your OTP for password reset is:</p>
+        <h1 style="letter-spacing:3px">${otp}</h1>
+        <p>This OTP will expire in 2 minutes.</p>
+      `,
+    });
+  } catch (error: any) {
+    console.error("Email reset error:", error.message);
+  }
 };
 
 //workspace invite email

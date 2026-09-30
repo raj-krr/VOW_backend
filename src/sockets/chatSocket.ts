@@ -4,13 +4,25 @@ import Channel from "../models/channel";
 import Workspace from "../models/workspace";
 import { verifySocketToken, getTokenFromSocket } from "./auth";
 
+const onlineUsersSet = new Set<string>();
+
 export default async function chatSocket(io: Server, socket: Socket) {
   try {
     const token = getTokenFromSocket(socket) || (socket.handshake.auth && (socket.handshake.auth as any).token);
-    const user = await verifySocketToken(token);
+    const user = (await verifySocketToken(token)) as any;
     (socket as any).user = user;
 
-    socket.join(`user:${user._id}`);
+    const userIdStr = user._id.toString();
+    onlineUsersSet.add(userIdStr);
+
+    socket.join(`user:${userIdStr}`);
+
+    // Broadcast online status to everyone
+    io.emit("user_online", { userId: userIdStr });
+
+    socket.on("get_online_users", () => {
+      socket.emit("online_users_list", Array.from(onlineUsersSet));
+    });
 
     socket.on("join_server", async (serverId: string) => {
       try {
@@ -41,7 +53,6 @@ export default async function chatSocket(io: Server, socket: Socket) {
     socket.on("send_message", async (payload: { channelId: string; content: string; attachments?: any[] }) => {
       try {
         const { channelId, content, attachments } = payload;
-        // basic validation
         if ((attachments?.length === 0 || !attachments) && (!content || content.trim() === "")) {
           return socket.emit("error", "Message content is required");
         }
@@ -52,7 +63,6 @@ export default async function chatSocket(io: Server, socket: Socket) {
         const channel = await Channel.findById(channelId);
         if (!channel) return socket.emit("error", "Channel not found");
 
-        // create message
         const message = await Message.create({
           channelId,
           sender: (socket as any).user._id,
@@ -62,29 +72,49 @@ export default async function chatSocket(io: Server, socket: Socket) {
 
         const populated = await Message.findById(message._id).populate("sender", "username avatar");
 
-        // emit to everyone in channel
         io.to(`channel:${channelId}`).emit("receive_message", populated);
+
+        if (channel.server) {
+          const workspace = await Workspace.findById(channel.server);
+          if (workspace && Array.isArray(workspace.members)) {
+            workspace.members.forEach((memberId: any) => {
+              const mStr = memberId ? memberId.toString() : null;
+              if (mStr) {
+                io.to(`user:${mStr}`).emit("receive_message", populated);
+              }
+            });
+          }
+        }
       } catch (err: any) {
         socket.emit("error", err.message || "Send message failed");
       }
     });
 
     socket.on("typing", (channelId: string) => {
-      socket.to(`channel:${channelId}`).emit("user_typing", { userId: user._id });
+      socket.to(`channel:${channelId}`).emit("user_typing", {
+        userId: userIdStr,
+        username: user.username || user.fullName || "Someone",
+        channelId,
+      });
     });
 
     socket.on("stop_typing", (channelId: string) => {
-      socket.to(`channel:${channelId}`).emit("user_stop_typing", { userId: user._id });
+      socket.to(`channel:${channelId}`).emit("user_stop_typing", {
+        userId: userIdStr,
+        username: user.username || user.fullName || "Someone",
+        channelId,
+      });
     });
 
-    // leave channel
     socket.on("leave_channel", (channelId: string) => {
       socket.leave(`channel:${channelId}`);
       socket.emit("left_channel", channelId);
     });
 
     socket.on("disconnect", () => {
-      console.log(`Chat user disconnected: ${user._id}`);
+      onlineUsersSet.delete(userIdStr);
+      io.emit("user_offline", { userId: userIdStr });
+      console.log(`Chat user disconnected: ${userIdStr}`);
     });
   } catch (err: any) {
     console.error("Chat socket authentication error:", err);

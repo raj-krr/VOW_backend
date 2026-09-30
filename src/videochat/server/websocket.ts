@@ -57,7 +57,7 @@ export class WebSocketSignalingServer {
         this.handleDisconnect(socket);
       });
 
-      socket.on('error', (error) => {
+      socket.on('error', (error: any) => {
         logger.error('WebSocket error:', error);
       });
 

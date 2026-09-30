@@ -11,16 +11,15 @@ import {
 import { verifyWorkspaceToken } from "../middlewares/workspace.middleware"; 
 import { validate } from "../middlewares/validate";
 
-import { createTeamSchema,renameTeamSchema,assignSuperviserSchema } from "../schemas/team";
-
+import { createTeamSchema, renameTeamSchema, assignSuperviserSchema } from "../schemas/team";
 
 const managerRouter = express.Router();
 
-managerRouter.post("/team/create/:workspaceId",validate(createTeamSchema), verifyWorkspaceToken, createTeam);
-managerRouter.get("/team/all/:workspaceId",verifyWorkspaceToken,getAllTeams)
-managerRouter.put("/team/rename/:workspaceId/:teamId",validate(renameTeamSchema), verifyWorkspaceToken, renameTeam);
+managerRouter.post("/team/create/:workspaceId", verifyWorkspaceToken, validate(createTeamSchema), createTeam);
+managerRouter.get("/team/all/:workspaceId", verifyWorkspaceToken, getAllTeams);
+managerRouter.put("/team/rename/:workspaceId/:teamId", verifyWorkspaceToken, validate(renameTeamSchema), renameTeam);
 managerRouter.put("/team/remove-member/:workspaceId/:teamId", verifyWorkspaceToken, removeMember);
-managerRouter.put("/team/assign-lead/:workspaceId/:teamId",validate(assignSuperviserSchema), verifyWorkspaceToken, assignSuperviser);
+managerRouter.put("/team/assign-lead/:workspaceId/:teamId", verifyWorkspaceToken, validate(assignSuperviserSchema), assignSuperviser);
 managerRouter.put("/team/add-members/:workspaceId/:teamId", verifyWorkspaceToken, addMembers);
 managerRouter.delete("/team/:workspaceId/:teamId", verifyWorkspaceToken, deleteTeam);
 

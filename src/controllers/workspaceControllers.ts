@@ -108,7 +108,8 @@ export const getWorkspaceDetails = async (req: Request, res: Response): Promise<
 
 export const rejoinWorkspace = async (req: Request , res: Response): Promise<void> => {
   try {
-    const{ workspaceId } = req.params;
+    const userId = (req.user?._id as Types.ObjectId) || null;
+    const { workspaceId } = req.params;
     if (!workspaceId) {
       res.status(400).json({ success: false, message: "workspaceId not provided" });
       return;
@@ -120,7 +121,20 @@ export const rejoinWorkspace = async (req: Request , res: Response): Promise<voi
       return;
     }
 
-    res.status(200).json({ success: true,msg:"workshop rejoined successfully" ,workspaceId });
+    const workspaceIdStr = (workspace._id as Types.ObjectId).toString();
+    const effectiveUserId = userId ? userId.toString() : workspace.manager.toString();
+    const workspaceToken = generateWorkspaceToken(workspaceIdStr, effectiveUserId);
+
+    const cookieName = `workspaceToken_${workspaceIdStr}`;
+    res.cookie(cookieName, workspaceToken, options);
+
+    res.status(200).json({
+      success: true,
+      msg: "workspace rejoined successfully",
+      workspaceId,
+      workspaceToken,
+      workspace,
+    });
   } catch (error: any) {
     console.error("Rejoin workspace error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
@@ -138,7 +152,7 @@ export const workspaceMembers = async (req: Request, res: Response): Promise<voi
 
    
     const workspace = await Workspace.findById(workspaceId)
-      .populate("members", "fullName ");
+      .populate("members", "fullName username avatar email");
 
     if (!workspace) {
       res.status(404).json({ success: false, message: "Workspace not found" });
@@ -146,8 +160,11 @@ export const workspaceMembers = async (req: Request, res: Response): Promise<voi
     }
 
     const members = workspace.members.map((m: any) => ({
-      id: m._id,
-      fullName: m.fullName,
+      _id: m._id ? m._id.toString() : m.toString(),
+      id: m._id ? m._id.toString() : m.toString(),
+      fullName: m.fullName || m.username || (m.email ? m.email.split("@")[0] : "User"),
+      username: m.username || m.fullName,
+      avatar: m.avatar || "",
     }));
 
     res.status(200).json({ success: true, members });

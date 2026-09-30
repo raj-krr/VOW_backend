@@ -4,7 +4,7 @@ import Message from "../models/message";
 export const sendMessageRest = async (req: Request, res: Response) => {
   try {
     const { channelId, content, attachments } = req.body;
-    if(attachments.length === 0 && (!content || content.trim() === "")){
+    if( !attachments ||attachments.length === 0 && (!content || content.trim() === "")){
       return  res.status(400).json({ error: "Message content or attachments are required" });}
     const sender = (req as any).user?._id || req.body.sender;
     const message = await Message.create({ channelId, sender, content, attachments });
