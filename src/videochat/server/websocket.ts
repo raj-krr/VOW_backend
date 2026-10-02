@@ -105,8 +105,28 @@ export class WebSocketSignalingServer {
       logger.debug('[Deserialized message]', message);
 
       if (!Protocol.isValidMessage(message)) {
+        // Allow heartbeat and auth messages that don't follow standard format
+        const rawMsg = message as any;
+        const rawType = rawMsg?.type;
+        if (rawType === 'heartbeat' || rawType === 'auth') {
+          // Heartbeat keeps participant alive
+          if (rawType === 'heartbeat' && rawMsg.participantId && rawMsg.roomId) {
+            this.sfuServer.handleHeartbeat(rawMsg.roomId, rawMsg.participantId);
+          }
+          return;
+        }
         logger.warn('Protocol.isValidMessage returned false for:', message);
         this.sendError(socket, 'Invalid message format');
+        return;
+      }
+
+      // Handle non-enum message types before the typed switch
+      const msgType = (message as any).type as string;
+      if (msgType === 'heartbeat' || msgType === 'auth') {
+        // Heartbeat: update participant liveness
+        if (message.participantId && message.roomId) {
+          this.sfuServer.handleHeartbeat(message.roomId, message.participantId);
+        }
         return;
       }
 

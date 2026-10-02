@@ -17,9 +17,30 @@ export const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // Free TURN servers for NAT traversal (critical for 4+ participants)
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
   ],
-  iceCandidatePoolSize: 10
+  iceCandidatePoolSize: 10,
+  iceTransportPolicy: 'all' as const,
+  bundlePolicy: 'max-bundle' as const,
+  rtcpMuxPolicy: 'require' as const
 };
 
 export const CHUNK_CONFIG = {
@@ -42,12 +63,12 @@ export const CODEC_CONFIG = {
 };
 
 export const LIMITS = {
-  MAX_PARTICIPANTS: 15,
+  MAX_PARTICIPANTS: 50,
   MAX_ROOMS: 100,
   MAX_MESSAGE_LENGTH: 1000,
   MAX_CHAT_HISTORY: 100,
-  HEARTBEAT_INTERVAL: 30000, // 30 seconds
-  PARTICIPANT_TIMEOUT: 60000 // 60 seconds
+  HEARTBEAT_INTERVAL: 15000, // 15 seconds — check more frequently
+  PARTICIPANT_TIMEOUT: 120000 // 120 seconds — more generous timeout
 };
 
 export const REDIS_KEYS = {
