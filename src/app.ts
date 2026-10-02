@@ -53,11 +53,14 @@ const corsOptions: cors.CorsOptions = {
     ) {
       return callback(null, true);
     }
-    return callback(null, true);
+    if (process.env.NODE_ENV !== "production") {
+      return callback(null, true);
+    }
+    return callback(new Error("CORS Policy Violation: Origin Not Allowed"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "x-workspace-token"],
   optionsSuccessStatus: 200,
 };
 

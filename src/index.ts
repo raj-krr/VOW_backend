@@ -20,7 +20,12 @@ async function startServer() {
 
     const io = initSocket(server);
 
-    // await initVideoChat(app, server);
+    try {
+      await initVideoChat(app, server);
+      console.log("Videochat signaling server initialized successfully");
+    } catch (vcErr) {
+      console.warn("Failed to initialize videochat subsystem:", vcErr);
+    }
 
     server.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);

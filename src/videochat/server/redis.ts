@@ -8,25 +8,48 @@ export class RedisManager {
   private pubClient: Redis | null = null;
   private subClient: Redis | null = null;
   private url: string;
+  private isConnected = false;
 
   constructor(url?: string) {
     this.url = url ?? DEFAULT_URL;
   }
 
   async connect() {
+    if (process.env.USE_REDIS !== "true" && !process.env.REDIS_URL) {
+      logger.info("[redis] Redis disabled or REDIS_URL not set (single-node mode)");
+      return;
+    }
+
     if (this.pubClient && this.subClient) return;
 
-    this.pubClient = new IORedis(this.url);
-    this.subClient = new IORedis(this.url);
+    try {
+      const isTls = this.url.startsWith("rediss://");
+      const redisOptions = {
+        maxRetriesPerRequest: 1,
+        retryStrategy: () => null, // Stop retrying if Redis connection fails
+        lazyConnect: true,
+        ...(isTls ? { tls: { rejectUnauthorized: false } } : {}),
+      };
 
-    this.pubClient.on("error", (err) => logger.error("[redis] pubClient error:", err));
-    this.subClient.on("error", (err) => logger.error("[redis] subClient error:", err));
+      this.pubClient = new IORedis(this.url, redisOptions);
+      this.subClient = new IORedis(this.url, redisOptions);
 
-    await Promise.all([
-      new Promise<void>((res) => this.pubClient!.once("ready", () => res())),
-      new Promise<void>((res) => this.subClient!.once("ready", () => res())),
-    ]);
-    logger.info("[redis] connected");
+      this.pubClient.on("error", (err) => logger.warn("[redis] pubClient unavailable:", err.message));
+      this.subClient.on("error", (err) => logger.warn("[redis] subClient unavailable:", err.message));
+
+      await Promise.all([
+        this.pubClient.connect(),
+        this.subClient.connect(),
+      ]);
+
+      this.isConnected = true;
+      logger.info("[redis] connected successfully");
+    } catch (err: any) {
+      logger.warn("[redis] Connection failed — running without Redis multi-node sync:", err.message);
+      this.pubClient = null;
+      this.subClient = null;
+      this.isConnected = false;
+    }
   }
 
   async disconnect() {
@@ -40,43 +63,47 @@ export class RedisManager {
     } finally {
       this.pubClient = null;
       this.subClient = null;
+      this.isConnected = false;
     }
   }
 
   async publish(channel: string, payload: any) {
-    if (!this.pubClient) throw new Error("Redis not connected");
+    if (!this.pubClient || !this.isConnected) return;
     const message = typeof payload === "string" ? payload : JSON.stringify(payload);
     try {
       await this.pubClient.publish(channel, message);
     } catch (err) {
       logger.warn("[redis] publish failed:", err);
-      throw err;
     }
   }
 
   async subscribe(channel: string, handler: (message: any) => void) {
-    if (!this.subClient) throw new Error("Redis not connected");
-    await this.subClient.subscribe(channel);
-    logger.info(`[redis] subscribed to ${channel}`);
+    if (!this.subClient || !this.isConnected) return;
+    try {
+      await this.subClient.subscribe(channel);
+      logger.info(`[redis] subscribed to ${channel}`);
 
-    this.subClient.on("message", (ch: string, rawMessage: string) => {
-      try {
-        logger.debug(`[redis:${process.pid}] message on ${ch}: ${rawMessage}`);
-        let parsed: any = rawMessage;
+      this.subClient.on("message", (ch: string, rawMessage: string) => {
         try {
-          parsed = JSON.parse(rawMessage);
-        } catch (e) {
-          logger.debug(`[redis:${process.pid}] message not json on ${ch}`);
+          logger.debug(`[redis:${process.pid}] message on ${ch}: ${rawMessage}`);
+          let parsed: any = rawMessage;
+          try {
+            parsed = JSON.parse(rawMessage);
+          } catch (e) {
+            logger.debug(`[redis:${process.pid}] message not json on ${ch}`);
+          }
+          handler(parsed);
+        } catch (err) {
+          logger.error("[redis] error handling message:", err);
         }
-        handler(parsed);
-      } catch (err) {
-        logger.error("[redis] error handling message:", err);
-      }
-    });
+      });
+    } catch (err) {
+      logger.warn(`[redis] subscribe to ${channel} failed:`, err);
+    }
   }
 
   async setRoomData(roomId: string, data: any) {
-    if (!this.pubClient) throw new Error("Redis not connected");
+    if (!this.pubClient || !this.isConnected) return;
     try {
       await this.pubClient.hset(`room:${roomId}`, data as any);
     } catch (err) {
@@ -85,7 +112,7 @@ export class RedisManager {
   }
 
   async deleteRoomData(roomId: string) {
-    if (!this.pubClient) throw new Error("Redis not connected");
+    if (!this.pubClient || !this.isConnected) return;
     try {
       await this.pubClient.del(`room:${roomId}`);
     } catch (err) {

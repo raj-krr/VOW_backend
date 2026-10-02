@@ -222,3 +222,43 @@ export const getAllUserWorkspaceFiles = async (req: Request, res: Response): Pro
     res.status(500).json({ message: "Failed to fetch user workspace files" });
   }
 };
+
+export const downloadFile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const fileId = req.params.id;
+    const userId = String(req.workspaceUser?.userId || req.user?._id || "");
+
+    const file = await FileModel.findById(fileId);
+    if (!file) {
+      res.status(404).json({ success: false, message: "File not found" });
+      return;
+    }
+
+    const workspace = await Workspace.findById(file.workspace);
+    if (!workspace) {
+      res.status(404).json({ success: false, message: "Workspace not found" });
+      return;
+    }
+
+    const isMember = workspace.members.some(
+      (m: any) => m.toString() === userId
+    );
+    const isManager = String(workspace.manager) === userId;
+
+    if (!isMember && !isManager) {
+      res.status(403).json({ success: false, message: "Unauthorized access to file" });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      url: file.url,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      size: file.size,
+    });
+  } catch (err: any) {
+    console.error("File download error:", err);
+    res.status(500).json({ success: false, message: "File download failed", error: err.message });
+  }
+};

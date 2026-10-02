@@ -181,10 +181,12 @@ export class SFUServer {
     participantName: string,
     socket: WebSocket
   ): { participantId: string; roomState: any } | null {
-    const room = this.rooms.get(roomId);
+    let room = this.rooms.get(roomId);
     if (!room) {
-      logger.warn(`Room ${roomId} not found`);
-      return null;
+      logger.info(`[SFU:${process.pid}] Room ${roomId} not found during join -> Auto-creating room`);
+      room = new RoomManager(roomId, `Room-${roomId}`);
+      this.rooms.set(roomId, room);
+      this.roomCreatedAt.set(roomId, Date.now());
     }
 
     if (!room.canJoin()) {
