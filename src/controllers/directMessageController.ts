@@ -70,29 +70,58 @@ export const sendDirectMessage = async (req: Request, res: Response) => {
 export const getDirectMessages = async (req: Request, res: Response) => {
   try {
     const { workspaceId, user1, user2 } = req.params;
+    const paramOtherId = (req.params as any).otherUserId;
     const currentUserId = (req as any).user?._id;
 
     if (!currentUserId) {
       return res.status(401).json({ error: "Unauthorized: user not found in token" });
     }
 
-    // Authorization: only participants can read their own DMs
-    if (String(currentUserId) !== user1 && String(currentUserId) !== user2) {
-      return res.status(403).json({ error: "Forbidden: you are not part of this conversation" });
+    const currentIdStr = String(currentUserId);
+    let targetUserId = paramOtherId;
+
+    if (!targetUserId) {
+      if (user1 && user2) {
+        if (currentIdStr === String(user1)) {
+          targetUserId = String(user2);
+        } else if (currentIdStr === String(user2)) {
+          targetUserId = String(user1);
+        } else {
+          // If neither directly matches, pick the valid identifier that is not current user or placeholder
+          targetUserId = (user1 === "undefined" || user1 === "null" || user1 === "me")
+            ? String(user2)
+            : String(user1);
+        }
+      } else if (user1) {
+        targetUserId = String(user1);
+      }
     }
 
-    if (!mongoose.Types.ObjectId.isValid(user1) || !mongoose.Types.ObjectId.isValid(user2)) {
+    if (
+      !targetUserId ||
+      targetUserId === "undefined" ||
+      targetUserId === "null" ||
+      targetUserId === "me" ||
+      !mongoose.Types.ObjectId.isValid(targetUserId)
+    ) {
       return res.json([]);
     }
 
+    const currentObjId = mongoose.Types.ObjectId.isValid(currentIdStr)
+      ? new mongoose.Types.ObjectId(currentIdStr)
+      : currentUserId;
+    const targetObjId = new mongoose.Types.ObjectId(targetUserId);
+
     const messages = await DirectMessage.find({
       $or: [
-        { sender: user1, receiver: user2 },
-        { sender: user2, receiver: user1 },
+        { sender: currentObjId, receiver: targetObjId },
+        { sender: targetObjId, receiver: currentObjId },
+        { sender: currentIdStr, receiver: targetUserId },
+        { sender: targetUserId, receiver: currentIdStr },
       ],
     })
-      .populate("sender", "username avatar")
-      .populate("receiver", "username avatar")
+      .populate("sender", "username fullName avatar email")
+      .populate("receiver", "username fullName avatar email")
       .sort({ createdAt: 1 });
 
     res.json(messages);
