@@ -32,6 +32,8 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
       user.fullName || user.username || (user.email ? user.email.split("@")[0] : "User");
     const avatarUrl = user.avatar || "";
 
+    socket.join(`user:${userId}`);
+
     socket.on("join", ({ workspaceId, displayName, avatar, x, y }: any) => {
       const roomName = getRoomName(workspaceId);
       socket.join(roomName);
@@ -82,6 +84,69 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
       // Real-time broadcast to all other workspace users in room
       socket.to(roomName).emit("user-moved", updated);
+    });
+
+    socket.on("collision_call", (payload: any) => {
+      try {
+        const { workspaceId, targetUserId, callerId, callerName, callerAvatar, roomId, callerSocketId } = payload || {};
+        console.log(`[presence] 🤝 collision_call from ${callerName} (${callerId || userId}) to ${targetUserId} in room ${roomId}`);
+        const eventData = {
+          callerId: callerId || userId,
+          callerName: callerName || defaultUsername,
+          callerAvatar: callerAvatar || avatarUrl,
+          callerSocketId: callerSocketId || socket.id,
+          targetUserId,
+          roomId,
+          workspaceId,
+        };
+
+        if (targetUserId) {
+          io.to(`user:${targetUserId}`).emit("collision_call_incoming", eventData);
+        }
+
+        const roomName = getRoomName(workspaceId);
+        socket.to(roomName).emit("collision_call_incoming", eventData);
+        socket.broadcast.emit("collision_call_incoming", eventData);
+      } catch (err: any) {
+        console.error("[presence] collision_call error:", err.message);
+      }
+    });
+
+    socket.on("leave", ({ workspaceId }: any) => {
+      try {
+        const roomName = getRoomName(workspaceId);
+        if (presenceStore[roomName]?.[userId]) {
+          delete presenceStore[roomName][userId];
+          io.to(roomName).emit("user-left", { userId });
+          console.log(`[presence] 🏃 User ${userId} left room ${roomName}`);
+        }
+      } catch (err: any) {
+        console.error("[presence] leave error:", err.message);
+      }
+    });
+
+    socket.on("collision_call_ended", (payload: any) => {
+      try {
+        const { workspaceId, targetUserId, callerId, roomId, callerSocketId } = payload || {};
+        console.log(`[presence] 📴 collision_call_ended from ${callerId || userId} to ${targetUserId} in room ${roomId}`);
+        const eventData = {
+          callerId: callerId || userId,
+          callerSocketId: callerSocketId || socket.id,
+          targetUserId,
+          roomId,
+          workspaceId,
+        };
+
+        if (targetUserId) {
+          io.to(`user:${targetUserId}`).emit("collision_call_ended", eventData);
+        }
+
+        const roomName = getRoomName(workspaceId);
+        socket.to(roomName).emit("collision_call_ended", eventData);
+        socket.broadcast.emit("collision_call_ended", eventData);
+      } catch (err: any) {
+        console.error("[presence] collision_call_ended error:", err.message);
+      }
     });
 
     socket.on("disconnect", () => {
