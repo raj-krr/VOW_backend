@@ -30,11 +30,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 const allowedOrigins = [
+  "https://vow.rajkrr.dev",
+  "https://www.vow.rajkrr.dev",
   "https://www.vow-org.me",
   "https://vow-org.me",
   "https://www.vow-live.me",
   "https://vow-live.me",
   "https://vow-pink.vercel.app",
+  "https://vow-blush.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
@@ -45,6 +48,7 @@ const corsOptions: cors.CorsOptions = {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
+      origin.includes("rajkrr.dev") ||
       origin.includes("vow-org.me") ||
       origin.includes("vow-live.me") ||
       origin.includes("vercel.app") ||
