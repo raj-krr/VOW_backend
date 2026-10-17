@@ -194,6 +194,26 @@ export class SFUServer {
       return null;
     }
 
+    // Evict any existing participant in this room with the same name or socket
+    const staleParticipants = room.getAllParticipants().filter(
+      p => p.participant.name === participantName || p.socket === socket
+    );
+    for (const stale of staleParticipants) {
+      logger.info(`[SFU:${process.pid}] Evicting stale participant ${stale.participant.id} (${stale.participant.name}) before new join`);
+      this.handleLeave(roomId, stale.participant.id);
+    }
+
+    // In direct 1-on-1 calls (call-*), also purge any closed/dead sockets
+    if (roomId.startsWith('call-')) {
+      const deadParticipants = room.getAllParticipants().filter(
+        p => !p.socket || p.socket.readyState !== 1 // WebSocket.OPEN is 1
+      );
+      for (const dead of deadParticipants) {
+        logger.info(`[SFU:${process.pid}] Evicting dead participant ${dead.participant.id} from direct call room ${roomId}`);
+        this.handleLeave(roomId, dead.participant.id);
+      }
+    }
+
     const participantId = uuidv4();
     const participant: Participant = {
       id: participantId,

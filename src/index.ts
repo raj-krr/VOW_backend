@@ -30,6 +30,7 @@ async function startServer() {
     server.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
     });
+    // Server started
 
     // cron
     cron.schedule("0 2 * * *", async () => {

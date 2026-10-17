@@ -149,6 +149,25 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
       }
     });
 
+    socket.on("peer_media_toggle", (payload: any) => {
+      try {
+        const { targetUserId, roomId, isVideoOff, isMuted, workspaceId } = payload || {};
+        const eventData = {
+          callerId: userId,
+          roomId,
+          isVideoOff,
+          isMuted,
+        };
+        if (targetUserId) {
+          io.to(`user:${targetUserId}`).emit("peer_media_toggle", eventData);
+        }
+        const roomName = getRoomName(workspaceId);
+        socket.to(roomName).emit("peer_media_toggle", eventData);
+      } catch (err: any) {
+        console.error("[presence] peer_media_toggle error:", err.message);
+      }
+    });
+
     socket.on("disconnect", () => {
       Object.keys(presenceStore).forEach((roomName) => {
         if (presenceStore[roomName]?.[userId]) {

@@ -62,6 +62,7 @@ export enum SignalingMessageType {
   STOP_PUBLISH = 'stop-publish',
   MEDIA_CHUNK = 'media-chunk',
   REQUEST_KEYFRAME = 'request-keyframe',
+  MEDIA_STATE = 'media-state',
   
   // Chat
   CHAT_MESSAGE = 'chat-message',

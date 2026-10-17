@@ -169,6 +169,10 @@ export class WebSocketSignalingServer {
           this.handleWebRTCSignaling(message);
           break;
 
+        case SignalingMessageType.MEDIA_STATE:
+          this.handleMediaState(message);
+          break;
+
         default:
           logger.warn(`Unknown message type: ${message.type}`);
       }
@@ -343,6 +347,18 @@ export class WebSocketSignalingServer {
     const targetParticipant = room.getParticipant(targetParticipantId);
     if (targetParticipant) {
       targetParticipant.sendMessage(message);
+    }
+  }
+
+  private handleMediaState(message: any) {
+    try {
+      const { roomId, participantId } = message;
+      if (!roomId) return;
+      const room = this.sfuServer.getRoom(roomId);
+      if (!room) return;
+      room.broadcastMessage(message, participantId);
+    } catch (err) {
+      logger.error('handleMediaState error:', err);
     }
   }
 
